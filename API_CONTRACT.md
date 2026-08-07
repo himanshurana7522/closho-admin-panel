@@ -682,8 +682,8 @@ Response includes: todayOrders, todayRevenue, totalProducts, lowStockCount, acti
 - **GET** `/admin/customers/:id`
 
 ### Settings
-- **GET** `/admin/settings/profile`
-- **PUT** `/admin/settings/profile`
+- **GET** `/admin/auth/me`
+- **PUT** `/admin/auth/me`
 - **GET** `/admin/settings/payments`
 - **PUT** `/admin/settings/payments`
 - **GET** `/admin/settings/config`

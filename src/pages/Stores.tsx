@@ -15,36 +15,59 @@ import {
 import { StoreFormDialog } from '@/features/stores/StoreFormDialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { toast } from 'sonner';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import api from '@/lib/api';
+import { Loader2 } from 'lucide-react';
 
 // Mock data
-const MOCK_STORES = [
-  { id: '1', name: 'Closho Downtown', address: '123 Main St', city: 'Mumbai', pincode: '400001', status: 'ACTIVE', radius: 5 },
-  { id: '2', name: 'Closho Bandra', address: '45 Linking Rd', city: 'Mumbai', pincode: '400050', status: 'ACTIVE', radius: 3 },
-  { id: '3', name: 'Closho Andheri', address: '78 Lokhandwala', city: 'Mumbai', pincode: '400053', status: 'INACTIVE', radius: 4 },
-];
-
 export function Stores() {
   const { user } = useAuthStore();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [stores, setStores] = useState(MOCK_STORES);
   const [search, setSearch] = useState('');
+  const queryClient = useQueryClient();
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['admin-stores'],
+    queryFn: async () => {
+      const res = await api.get('/admin/stores');
+      if (!res?.data) return [];
+      if (Array.isArray(res.data.data)) return res.data.data;
+      if (res.data.data && Array.isArray(res.data.data.stores)) return res.data.data.stores;
+      if (Array.isArray(res.data.stores)) return res.data.stores;
+      if (Array.isArray(res.data)) return res.data;
+      return [];
+    }
+  });
+  
+  const stores = data || [];
 
   const filteredStores = stores.filter(
-    (store) =>
-      store.name.toLowerCase().includes(search.toLowerCase()) ||
-      store.city.toLowerCase().includes(search.toLowerCase()) ||
-      store.id.toLowerCase().includes(search.toLowerCase())
+    (store: any) => {
+      const storeName = store.name || 'Unknown Store';
+      const city = store.city || '';
+      const id = store.id || store._id || '';
+      return String(storeName).toLowerCase().includes(search.toLowerCase()) ||
+        String(city).toLowerCase().includes(search.toLowerCase()) ||
+        String(id).toLowerCase().includes(search.toLowerCase());
+    }
   );
 
-  const toggleStatus = (id: string) => {
-    setStores(stores.map(store => {
-      if (store.id === id) {
-        const newStatus = store.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
-        toast.success(`Store ${store.name} marked as ${newStatus}`);
-        return { ...store, status: newStatus };
-      }
-      return store;
-    }));
+  const toggleStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string, status: string }) => {
+      await api.patch(`/admin/stores/${id}/status`, { status });
+    },
+    onSuccess: () => {
+      toast.success('Store status updated');
+      queryClient.invalidateQueries({ queryKey: ['admin-stores'] });
+    },
+    onError: () => {
+      toast.error('Failed to update store status');
+    }
+  });
+
+  const toggleStatus = (id: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    toggleStatusMutation.mutate({ id, status: newStatus });
   };
 
   return (
@@ -74,7 +97,15 @@ export function Stores() {
         </div>
       </div>
 
-      {filteredStores.length === 0 ? (
+      {isLoading ? (
+        <div className="flex justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : error ? (
+        <div className="text-center py-20 text-red-400 bg-red-400/10 rounded-xl border border-red-400/20">
+          Failed to load stores.
+        </div>
+      ) : filteredStores.length === 0 ? (
         <EmptyState 
           icon={StoreIcon}
           title="No stores found"
@@ -100,16 +131,20 @@ export function Stores() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredStores.map((store) => (
-                <TableRow key={store.id} className="border-b border-white/[0.03] hover:bg-white/[0.015] transition-colors group">
+              {filteredStores.map((store: any) => {
+                const storeId = store.id || store._id;
+                const storeName = store.name || 'Unknown Store';
+                const status = store.status || (store.isActive ? 'ACTIVE' : 'INACTIVE');
+                return (
+                <TableRow key={storeId} className="border-b border-white/[0.03] hover:bg-white/[0.015] transition-colors group">
                   <TableCell className="px-4 py-3 pl-5">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20">
                         <StoreIcon className="h-5 w-5 text-primary" />
                       </div>
                       <div>
-                        <div className="font-semibold text-foreground">{store.name}</div>
-                        <div className="text-xs text-muted-foreground font-mono mt-0.5">ID: {store.id}</div>
+                        <div className="font-semibold text-foreground">{storeName}</div>
+                        <div className="text-xs text-muted-foreground font-mono mt-0.5">ID: {storeId}</div>
                       </div>
                     </div>
                   </TableCell>
@@ -117,26 +152,26 @@ export function Stores() {
                     <div className="flex items-start gap-2">
                       <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
                       <div>
-                        <div className="text-sm font-medium">{store.address}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5">{store.city}, {store.pincode}</div>
+                        <div className="text-sm font-medium">{store.address || 'N/A'}</div>
+                        <div className="text-xs text-muted-foreground mt-0.5">{store.city || ''}{store.pincode ? `, ${store.pincode}` : ''}</div>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell className="px-4 py-3">
                     <Badge variant="outline" className="bg-background border-border/50">
-                      {store.radius} km
+                      {store.deliveryRadiusKm || store.radius || 0} km
                     </Badge>
                   </TableCell>
                   <TableCell className="px-4 py-3">
                     <Badge 
                       variant="outline"
                       className={
-                        store.status === 'ACTIVE' 
+                        status === 'ACTIVE' 
                           ? 'text-[10px] font-medium px-2 py-0.5 rounded-full bg-green-500/10 text-green-500 border-none' 
                           : 'text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground border-none'
                       }
                     >
-                      {store.status}
+                      {status}
                     </Badge>
                   </TableCell>
                   <TableCell className="px-4 py-3 pr-5 text-right space-x-2">
@@ -147,16 +182,18 @@ export function Stores() {
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        onClick={() => toggleStatus(store.id)}
-                        className={`h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity ${store.status === 'ACTIVE' ? 'text-destructive hover:text-destructive hover:bg-destructive/10' : 'text-primary hover:text-primary hover:bg-primary/10'}`}
-                        title={store.status === 'ACTIVE' ? 'Deactivate Store' : 'Activate Store'}
+                        onClick={() => toggleStatus(storeId, status)}
+                        disabled={toggleStatusMutation.isPending}
+                        className={`h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity ${status === 'ACTIVE' ? 'text-destructive hover:text-destructive hover:bg-destructive/10' : 'text-primary hover:text-primary hover:bg-primary/10'}`}
+                        title={status === 'ACTIVE' ? 'Deactivate Store' : 'Activate Store'}
                       >
-                        {store.status === 'ACTIVE' ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
+                        {status === 'ACTIVE' ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
                       </Button>
                     )}
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </div>

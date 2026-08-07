@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -8,21 +8,66 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Search, UploadCloud, Download, Save, AlertCircle, TrendingDown, Store } from 'lucide-react';
 import { toast } from 'sonner';
 
-const MOCK_STOCK = [
-  { id: '1', product: 'Classic Black T-Shirt', sku: 'TS-BLK-M', variant: 'Medium', stock: 15, threshold: 20 },
-  { id: '2', product: 'Classic Black T-Shirt', sku: 'TS-BLK-L', variant: 'Large', stock: 45, threshold: 20 },
-  { id: '3', product: 'Vintage Denim Jacket', sku: 'DJ-BLU-L', variant: 'Large', stock: 8, threshold: 10 },
-  { id: '4', product: 'Summer Floral Dress', sku: 'FD-RED-S', variant: 'Small', stock: 0, threshold: 5 },
-  { id: '5', product: 'Running Sneakers', sku: 'RS-WHT-42', variant: 'Size 42', stock: 110, threshold: 15 },
-  { id: '6', product: 'Running Sneakers', sku: 'RS-WHT-43', variant: 'Size 43', stock: 3, threshold: 15 },
-];
+import { useQuery, useMutation } from '@tanstack/react-query';
+import api from '@/lib/api';
+import { Loader2 } from 'lucide-react';
+
+interface StockItem {
+  id: string;
+  product: string;
+  sku: string;
+  variant: string;
+  stock: number;
+  threshold: number;
+}
 
 export function Stock() {
   const [store, setStore] = useState('store_1');
-  const [stocks, setStocks] = useState(MOCK_STOCK);
   const [search, setSearch] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
+  const [stocks, setStocks] = useState<StockItem[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
+
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['admin-stock', store],
+    queryFn: async () => {
+      const res = await api.get('/admin/stock');
+      const items = res?.data?.data || res?.data || [];
+      return items.map((item: any) => ({
+        id: item.id,
+        product: item.product?.name || 'Unknown Product',
+        sku: item.sku,
+        variant: `${item.color || ''} ${item.size || ''}`.trim() || 'N/A',
+        stock: item.stock,
+        threshold: 10
+      }));
+    }
+  });
+
+  // Sync data to local state when it loads
+  useEffect(() => {
+    if (data) {
+      setStocks(data);
+      setHasChanges(false);
+    }
+  }, [data]);
+
+  const saveMutation = useMutation({
+    mutationFn: async (updatedStocks: StockItem[]) => {
+      // Best effort payload for bulk update
+      const payload = {
+        items: updatedStocks.map(s => ({ id: s.id, stock: s.stock }))
+      };
+      await api.post('/admin/stock/bulk', payload);
+    },
+    onSuccess: () => {
+      toast.success('Inventory levels updated successfully!');
+      setHasChanges(false);
+      refetch();
+    },
+    onError: () => {
+      toast.error('Failed to update inventory');
+    }
+  });
 
   const filteredStocks = stocks.filter(
     (stock) =>
@@ -42,12 +87,8 @@ export function Stock() {
     setHasChanges(true);
   };
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    setIsSaving(false);
-    setHasChanges(false);
-    toast.success('Inventory levels updated successfully!');
+  const handleSave = () => {
+    saveMutation.mutate(stocks);
   };
 
   const lowStockCount = stocks.filter(s => s.stock > 0 && s.stock <= s.threshold).length;
@@ -72,10 +113,10 @@ export function Stock() {
           <Button 
             className="text-xs font-medium h-8 px-3 flex-1 sm:flex-none flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 min-w-[140px] shadow-md transition-all"
             onClick={handleSave}
-            disabled={!hasChanges || isSaving}
+            disabled={!hasChanges || saveMutation.isPending}
           >
-            {isSaving ? (
-              <>Saving...</>
+            {saveMutation.isPending ? (
+              <><Loader2 className="h-4 w-4 animate-spin" /> Saving...</>
             ) : (
               <><Save className="h-4 w-4" /> Save Changes</>
             )}
@@ -169,60 +210,75 @@ export function Stock() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredStocks.map((item) => (
-                  <TableRow key={item.id} className="border-b border-white/[0.03] hover:bg-white/[0.015] transition-colors group">
-                    <TableCell className="px-4 py-3 pl-5 font-medium text-foreground">{item.product}</TableCell>
-                    <TableCell className="px-4 py-3 font-mono text-xs text-muted-foreground">{item.sku}</TableCell>
-                    <TableCell className="px-4 py-3">
-                      <span className="inline-flex items-center rounded-md bg-secondary/50 px-2 py-1 text-xs font-medium text-secondary-foreground ring-1 ring-inset ring-border/50">
-                        {item.variant}
-                      </span>
-                    </TableCell>
-                    <TableCell className="px-4 py-3">
-                      <div className="relative">
-                        <Input 
-                          type="number" 
-                          value={item.stock} 
-                          onChange={(e) => handleStockChange(item.id, e.target.value)}
-                          className={`h-9 bg-background shadow-sm transition-colors ${
-                            item.stock === 0 ? 'border-destructive focus-visible:ring-destructive text-destructive font-bold bg-destructive/5' : 
-                            item.stock <= item.threshold ? 'border-yellow-500/50 focus-visible:ring-yellow-500 text-yellow-500 font-bold bg-yellow-500/5' : 
-                            'border-border/60 focus-visible:ring-primary'
-                          }`}
-                        />
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-32 text-center">
+                      <div className="flex justify-center items-center">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary/50" />
                       </div>
                     </TableCell>
-                    <TableCell className="px-4 py-3">
-                      <Input 
-                        type="number" 
-                        value={item.threshold} 
-                        onChange={(e) => handleThresholdChange(item.id, e.target.value)}
-                        className="h-9 bg-background shadow-sm border-border/60 focus-visible:ring-primary text-muted-foreground"
-                      />
-                    </TableCell>
-                    <TableCell className="px-4 py-3 pr-5 text-right">
-                      {item.stock === 0 ? (
-                        <Badge variant="destructive" className="inline-flex items-center gap-1.5 shadow-sm w-28 justify-center border-none">
-                          <AlertCircle className="h-3.5 w-3.5" /> Out of Stock
-                        </Badge>
-                      ) : item.stock <= item.threshold ? (
-                        <Badge variant="outline" className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-500 border-none inline-flex items-center gap-1.5 w-28 justify-center">
-                          <TrendingDown className="h-3.5 w-3.5" /> Low Stock
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-green-500/10 text-green-500 border-none inline-flex items-center justify-center w-28">
-                          In Stock
-                        </Badge>
-                      )}
+                  </TableRow>
+                ) : error ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-32 text-center text-red-400">
+                      Failed to load stock.
                     </TableCell>
                   </TableRow>
-                ))}
-                {filteredStocks.length === 0 && (
+                ) : filteredStocks.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
                       No stock items match your search.
                     </TableCell>
                   </TableRow>
+                ) : (
+                  filteredStocks.map((item) => (
+                    <TableRow key={item.id} className="border-b border-white/[0.03] hover:bg-white/[0.015] transition-colors group">
+                      <TableCell className="px-4 py-3 pl-5 font-medium text-foreground">{item.product}</TableCell>
+                      <TableCell className="px-4 py-3 font-mono text-xs text-muted-foreground">{item.sku}</TableCell>
+                      <TableCell className="px-4 py-3">
+                        <span className="inline-flex items-center rounded-md bg-secondary/50 px-2 py-1 text-xs font-medium text-secondary-foreground ring-1 ring-inset ring-border/50">
+                          {item.variant}
+                        </span>
+                      </TableCell>
+                      <TableCell className="px-4 py-3">
+                        <div className="relative">
+                          <Input 
+                            type="number" 
+                            value={item.stock} 
+                            onChange={(e) => handleStockChange(item.id, e.target.value)}
+                            className={`h-9 bg-background shadow-sm transition-colors ${
+                              item.stock === 0 ? 'border-destructive focus-visible:ring-destructive text-destructive font-bold bg-destructive/5' : 
+                              item.stock <= item.threshold ? 'border-yellow-500/50 focus-visible:ring-yellow-500 text-yellow-500 font-bold bg-yellow-500/5' : 
+                              'border-border/60 focus-visible:ring-primary'
+                            }`}
+                          />
+                        </div>
+                      </TableCell>
+                      <TableCell className="px-4 py-3">
+                        <Input 
+                          type="number" 
+                          value={item.threshold} 
+                          onChange={(e) => handleThresholdChange(item.id, e.target.value)}
+                          className="h-9 bg-background shadow-sm border-border/60 focus-visible:ring-primary text-muted-foreground"
+                        />
+                      </TableCell>
+                      <TableCell className="px-4 py-3 pr-5 text-right">
+                        {item.stock === 0 ? (
+                          <Badge variant="destructive" className="inline-flex items-center gap-1.5 shadow-sm w-28 justify-center border-none">
+                            <AlertCircle className="h-3.5 w-3.5" /> Out of Stock
+                          </Badge>
+                        ) : item.stock <= item.threshold ? (
+                          <Badge variant="outline" className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-500 border-none inline-flex items-center gap-1.5 w-28 justify-center">
+                            <TrendingDown className="h-3.5 w-3.5" /> Low Stock
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-green-500/10 text-green-500 border-none inline-flex items-center justify-center w-28">
+                            In Stock
+                          </Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))
                 )}
               </TableBody>
             </Table>

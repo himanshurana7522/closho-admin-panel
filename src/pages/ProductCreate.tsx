@@ -11,6 +11,9 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, UploadCloud, Plus, Trash2, CheckCircle2, Loader2, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import api from '@/lib/api';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const productSchema = z.object({
   name: z.string().min(2, 'Name is required'),
@@ -46,25 +49,52 @@ export function ProductCreate() {
     }
   });
 
-  useEffect(() => {
-    if (isEditing && id) {
-      reset({
-        name: 'Classic Black T-Shirt',
-        description: 'High quality premium t-shirt with modern fit.',
-        category: 'Men / Topwear',
-        brand: 'Closho',
-        basePrice: 999,
-        discountedPrice: 799,
-        material: '100% Cotton',
-        careInstructions: 'Machine wash cold',
-        gender: 'Men',
-        isActive: true,
-      });
-      setImages(['https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=100&q=80']);
-      setSizes(['S', 'M', 'L']);
-      setColors(['Black']);
+  const { data: categoriesData } = useQuery({
+    queryKey: ['admin-categories'],
+    queryFn: async () => {
+      const res = await api.get('/admin/categories');
+      if (!res?.data) return [];
+      if (Array.isArray(res.data.data)) return res.data.data;
+      if (res.data.data && Array.isArray(res.data.data.categories)) return res.data.data.categories;
+      if (Array.isArray(res.data.categories)) return res.data.categories;
+      if (Array.isArray(res.data)) return res.data;
+      return [];
     }
-  }, [isEditing, id, reset]);
+  });
+
+  const { data: productData } = useQuery({
+    queryKey: ['admin-product', id],
+    queryFn: async () => {
+      const res = await api.get(`/admin/products/${id}`);
+      return res.data.data;
+    },
+    enabled: isEditing
+  });
+
+  useEffect(() => {
+    if (isEditing && productData) {
+      reset({
+        name: productData.name || '',
+        description: productData.description || '',
+        category: productData.category?.id || productData.category || '',
+        brand: productData.brand || '',
+        basePrice: productData.price || productData.basePrice || 0,
+        discountedPrice: productData.discountedPrice,
+        material: productData.material || '',
+        careInstructions: productData.careInstructions || '',
+        gender: productData.gender || '',
+        isActive: productData.isActive !== false,
+      });
+      setImages(productData.images || productData.thumbnail ? [productData.thumbnail] : []);
+      // Extract sizes and colors from variants if available
+      if (productData.variants) {
+        const uniqueSizes = Array.from(new Set(productData.variants.map((v: any) => v.size).filter(Boolean))) as string[];
+        const uniqueColors = Array.from(new Set(productData.variants.map((v: any) => v.color).filter(Boolean))) as string[];
+        if (uniqueSizes.length > 0) setSizes(uniqueSizes);
+        if (uniqueColors.length > 0) setColors(uniqueColors);
+      }
+    }
+  }, [isEditing, productData, reset]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -100,11 +130,31 @@ export function ProductCreate() {
     }
   };
 
+  const saveMutation = useMutation({
+    mutationFn: async (data: any) => {
+      if (isEditing) {
+        return await api.put(`/admin/products/${id}`, data);
+      } else {
+        return await api.post('/admin/products', data);
+      }
+    },
+    onSuccess: () => {
+      toast.success(`Product ${isEditing ? 'updated' : 'created'} successfully!`);
+      navigate('/products');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to save product');
+    }
+  });
+
   const onSubmit = async (data: ProductFormValues) => {
-    console.log(data);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    toast.success(`Product ${isEditing ? 'updated' : 'created'} successfully!`);
-    navigate('/products');
+    const payload = {
+      ...data,
+      price: data.basePrice,
+      images,
+      variants: colors.flatMap(color => sizes.map(size => ({ size, color, stock: 10, price: data.basePrice })))
+    };
+    saveMutation.mutate(payload);
   };
 
   const inputClass = "bg-white/[0.03] border-white/[0.06] h-9 text-sm placeholder:text-white/15 focus-visible:ring-primary/30 focus-visible:border-primary/40";
@@ -171,7 +221,20 @@ export function ProductCreate() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div className="space-y-1.5">
                   <Label htmlFor="category" className={labelClass}>Category *</Label>
-                  <Input id="category" {...register('category')} placeholder="e.g. Men / T-Shirts" className={inputClass} />
+                  {categoriesData?.length ? (
+                    <Select onValueChange={(val) => reset({ ...productData, category: val })} defaultValue={productData?.category?.id || productData?.category}>
+                      <SelectTrigger className={inputClass}>
+                        <SelectValue placeholder="Select a category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categoriesData.map((cat: any) => (
+                          <SelectItem key={cat.id || cat._id} value={cat.id || cat._id}>{cat.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input id="category" {...register('category')} placeholder="e.g. Men / T-Shirts" className={inputClass} />
+                  )}
                   {errors.category && <p className="text-[11px] text-red-400/80">{errors.category.message}</p>}
                 </div>
                 <div className="space-y-1.5">

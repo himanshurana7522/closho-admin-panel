@@ -11,4 +11,12 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    proxy: {
+      '/admin': {
+        target: 'https://api-closho.onrender.com',
+        changeOrigin: true,
+      }
+    }
+  }
 })

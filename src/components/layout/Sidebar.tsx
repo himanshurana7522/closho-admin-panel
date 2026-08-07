@@ -141,10 +141,10 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
       <div className="p-3 mt-auto">
         <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04] group hover:bg-white/[0.04] transition-colors">
           <div className="h-8 w-8 rounded-full bg-primary/15 flex items-center justify-center text-primary text-xs font-bold shrink-0">
-            {user?.name?.substring(0, 2).toUpperCase() || 'AD'}
+            {user?.fullName?.substring(0, 2).toUpperCase() || 'AD'}
           </div>
           <div className="flex flex-col min-w-0 flex-1">
-            <span className="text-xs font-medium text-white/80 truncate">{user?.name}</span>
+            <span className="text-xs font-medium text-white/80 truncate">{user?.fullName}</span>
             <span className="text-[10px] text-white/25 truncate">{user?.role?.replace('_', ' ')}</span>
           </div>
           <button

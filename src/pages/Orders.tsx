@@ -9,32 +9,46 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Search, Download, Eye, FileSearch } from 'lucide-react';
 import { format } from 'date-fns';
 import { EmptyState } from '@/components/ui/empty-state';
-
-const MOCK_ORDERS = [
-  { id: 'ORD-5001', date: new Date(2023, 9, 15, 14, 30), customer: 'Rahul Sharma', store: 'Closho Downtown', total: 2499, status: 'PENDING', payment: 'UPI' },
-  { id: 'ORD-5002', date: new Date(2023, 9, 15, 12, 15), customer: 'Priya Patel', store: 'Closho Bandra', total: 3899, status: 'SHIPPED', payment: 'Card' },
-  { id: 'ORD-5003', date: new Date(2023, 9, 14, 18, 45), customer: 'Amit Kumar', store: 'Closho Andheri', total: 1299, status: 'DELIVERED', payment: 'COD' },
-  { id: 'ORD-5004', date: new Date(2023, 9, 14, 10, 10), customer: 'Neha Singh', store: 'Closho Downtown', total: 5699, status: 'CANCELLED', payment: 'Card' },
-  { id: 'ORD-5005', date: new Date(2023, 9, 13, 16, 20), customer: 'Vikram Singh', store: 'Closho Juhu', total: 899, status: 'CONFIRMED', payment: 'UPI' },
-];
-
-const statusColors: Record<string, string> = {
-  PENDING: 'bg-yellow-500/10 text-yellow-500 border-none',
-  CONFIRMED: 'bg-blue-500/10 text-blue-500 border-none',
-  PACKED: 'bg-indigo-500/10 text-indigo-500 border-none',
-  SHIPPED: 'bg-purple-500/10 text-purple-500 border-none',
-  DELIVERED: 'bg-green-500/10 text-green-500 border-none',
-  CANCELLED: 'bg-destructive/10 text-destructive border-none',
-  RETURNED: 'bg-orange-500/10 text-orange-500 border-none',
-};
+import { useQuery } from '@tanstack/react-query';
+import api from '@/lib/api';
+import { Loader2 } from 'lucide-react';
 
 export function Orders() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
 
-  const filteredOrders = MOCK_ORDERS.filter(o => {
-    const matchesSearch = o.id.toLowerCase().includes(search.toLowerCase()) || o.customer.toLowerCase().includes(search.toLowerCase());
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['admin-orders', page, limit],
+    queryFn: async () => {
+      const res = await api.get('/admin/orders', { params: { page, limit } });
+      let orders = [];
+      let pagination = { totalPages: 1, currentPage: 1, totalOrders: 0 };
+      
+      if (res?.data) {
+        if (Array.isArray(res.data.data)) orders = res.data.data;
+        else if (res.data.data && Array.isArray(res.data.data.orders)) orders = res.data.data.orders;
+        else if (Array.isArray(res.data.orders)) orders = res.data.orders;
+        else if (Array.isArray(res.data)) orders = res.data;
+        
+        if (res.data.pagination) pagination = res.data.pagination;
+        else if (res.data.data?.pagination) pagination = res.data.data.pagination;
+      }
+      return { orders, pagination };
+    }
+  });
+
+  const orders = data?.orders || [];
+  const pagination = data?.pagination || { totalPages: 1, currentPage: 1, totalOrders: 0 };
+
+  const filteredOrders = orders.filter((o: any) => {
+    const orderId = o.id || o._id || o.orderNumber;
+    const customerName = o.customer?.name || o.customer?.fullName || 'Unknown Customer';
+    
+    const matchesSearch = String(orderId || '').toLowerCase().includes(search.toLowerCase()) || String(customerName || '').toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'ALL' || o.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -81,7 +95,15 @@ export function Orders() {
         </Select>
       </div>
 
-      {filteredOrders.length === 0 ? (
+      {isLoading ? (
+        <div className="flex justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : error ? (
+        <div className="text-center py-20 text-red-400 bg-red-400/10 rounded-xl border border-red-400/20">
+          Failed to load orders.
+        </div>
+      ) : filteredOrders.length === 0 ? (
         <EmptyState 
           icon={FileSearch}
           title="No orders found"
@@ -107,49 +129,100 @@ export function Orders() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredOrders.map((order) => (
-                <TableRow key={order.id} className="border-b border-white/[0.03] hover:bg-white/[0.015] transition-colors group">
+              {filteredOrders.map((order: any) => {
+                const orderId = order.id || order._id || order.orderNumber;
+                const orderDate = new Date(order.createdAt || order.date || Date.now());
+                const customerName = order.customer?.name || order.customer?.fullName || 'Unknown Customer';
+                const storeName = order.store?.name || order.store || 'Main Store';
+                const total = typeof order.total === 'number' ? order.total : (order.amount || 0);
+                const paymentMethod = order.payment?.method || order.paymentMethod || order.payment || 'N/A';
+                
+                const statusColors: Record<string, string> = {
+                  PENDING: 'bg-yellow-500/10 text-yellow-500 border-none',
+                  CONFIRMED: 'bg-blue-500/10 text-blue-500 border-none',
+                  PACKED: 'bg-indigo-500/10 text-indigo-500 border-none',
+                  SHIPPED: 'bg-purple-500/10 text-purple-500 border-none',
+                  DELIVERED: 'bg-green-500/10 text-green-500 border-none',
+                  CANCELLED: 'bg-destructive/10 text-destructive border-none',
+                  RETURNED: 'bg-orange-500/10 text-orange-500 border-none',
+                };
+                
+                return (
+                <TableRow key={orderId} className="border-b border-white/[0.03] hover:bg-white/[0.015] transition-colors group">
                   <TableCell className="px-4 py-3 pl-5">
-                    <div className="font-semibold text-foreground">{order.id}</div>
+                    <div className="font-semibold text-foreground">{orderId}</div>
                     <Badge variant="outline" className="mt-1 text-[10px] bg-background border-border/50">
-                      {order.payment}
+                      {paymentMethod}
                     </Badge>
                   </TableCell>
                   <TableCell className="px-4 py-3">
-                    <div className="text-sm font-medium">{format(order.date, 'MMM dd, yyyy')}</div>
+                    <div className="text-sm font-medium">{format(orderDate, 'MMM dd, yyyy')}</div>
                     <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
-                      {format(order.date, 'hh:mm a')}
+                      {format(orderDate, 'hh:mm a')}
                     </div>
                   </TableCell>
                   <TableCell className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs uppercase border border-primary/20">
-                        {order.customer.substring(0, 2)}
+                        {customerName.substring(0, 2)}
                       </div>
-                      <span className="font-medium">{order.customer}</span>
+                      <span className="font-medium">{customerName}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="px-4 py-3 text-muted-foreground text-sm">{order.store}</TableCell>
-                  <TableCell className="px-4 py-3 font-semibold">₹{order.total.toLocaleString()}</TableCell>
+                  <TableCell className="px-4 py-3 text-muted-foreground text-sm">{storeName}</TableCell>
+                  <TableCell className="px-4 py-3 font-semibold">₹{total.toLocaleString()}</TableCell>
                   <TableCell className="px-4 py-3">
-                    <Badge variant="outline" className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${statusColors[order.status]} transition-colors`}>
-                      {order.status}
+                    <Badge variant="outline" className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${statusColors[order.status?.toUpperCase()] || statusColors.PENDING} transition-colors`}>
+                      {order.status || 'PENDING'}
                     </Badge>
                   </TableCell>
                   <TableCell className="px-4 py-3 pr-5 text-right">
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      onClick={() => navigate(`/orders/${order.id}`)}
+                      onClick={() => navigate(`/orders/${orderId}`)}
                       className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/20 hover:text-primary"
                     >
                       <Eye className="h-4 w-4" />
                     </Button>
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
+          
+          {/* Pagination Controls */}
+          {pagination.totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-white/[0.04] bg-[#0A0A0A]">
+              <div className="text-sm text-white/50">
+                Showing page {pagination.currentPage} of {pagination.totalPages} ({pagination.totalOrders || orders.length} total orders)
+              </div>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="h-8 border-border/50 bg-transparent hover:bg-white/[0.04]"
+                >
+                  Previous
+                </Button>
+                <div className="text-sm font-medium text-white px-2">
+                  {page}
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
+                  disabled={page >= pagination.totalPages}
+                  className="h-8 border-border/50 bg-transparent hover:bg-white/[0.04]"
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

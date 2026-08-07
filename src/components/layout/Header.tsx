@@ -80,14 +80,14 @@ export function Header({ onMenuClick }: HeaderProps) {
         <DropdownMenu>
           <DropdownMenuTrigger className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/[0.04] transition-colors outline-none cursor-pointer">
               <div className="h-7 w-7 rounded-full bg-primary/15 flex items-center justify-center text-primary text-[10px] font-bold">
-                {user?.name?.substring(0, 2).toUpperCase() || 'AD'}
+                {user?.fullName?.substring(0, 2).toUpperCase() || 'AD'}
               </div>
-              <span className="text-xs font-medium text-white/60 hidden sm:block">{user?.name?.split(' ')[0]}</span>
+              <span className="text-xs font-medium text-white/60 hidden sm:block">{user?.fullName?.split(' ')[0]}</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-52 bg-[#0A0A0A] border-white/[0.06]" align="end">
             <DropdownMenuLabel className="font-normal px-3 py-2">
               <div className="flex flex-col gap-0.5">
-                <p className="text-sm font-medium text-white/90">{user?.name || 'Admin User'}</p>
+                <p className="text-sm font-medium text-white/90">{user?.fullName || 'Admin User'}</p>
                 <p className="text-[11px] text-white/30">{user?.email || 'admin@closho.com'}</p>
               </div>
             </DropdownMenuLabel>

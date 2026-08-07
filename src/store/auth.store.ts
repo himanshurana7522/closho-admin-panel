@@ -3,8 +3,9 @@ import { persist } from 'zustand/middleware';
 
 interface User {
   id: string;
-  name: string;
+  fullName: string;
   email: string;
+  phone?: string;
   role: 'SUPER_ADMIN' | 'STORE_ADMIN';
   storeId?: string; // If STORE_ADMIN
 }

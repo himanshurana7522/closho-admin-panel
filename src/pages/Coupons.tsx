@@ -8,6 +8,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import api from '@/lib/api';
+import { Loader2 } from 'lucide-react';
 
 export function Coupons() {
   const [search, setSearch] = useState('');
@@ -20,6 +23,37 @@ export function Coupons() {
     toast.success(`Coupon code ${code} copied!`);
     setTimeout(() => setCopiedCode(null), 2000);
   };
+  
+  const queryClient = useQueryClient();
+  
+  const { data: couponsData, isLoading, error } = useQuery({
+    queryKey: ['admin-coupons'],
+    queryFn: async () => {
+      const res = await api.get('/admin/coupons');
+      if (res?.data?.data && Array.isArray(res.data.data)) return res.data.data;
+      if (res?.data && Array.isArray(res.data)) return res.data;
+      return [];
+    }
+  });
+  
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/admin/coupons/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-coupons'] });
+      toast.success('Coupon deleted successfully');
+    },
+    onError: () => {
+      toast.error('Failed to delete coupon');
+    }
+  });
+
+  const coupons = couponsData || [];
+  
+  const filteredCoupons = coupons.filter((coupon: any) => 
+    coupon.code?.toLowerCase().includes(search.toLowerCase())
+  );
   
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-8">
@@ -115,104 +149,83 @@ export function Coupons() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            <TableRow className="border-b border-white/[0.03] hover:bg-white/[0.015] transition-colors group">
-              <TableCell className="px-4 py-3 pl-5">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0">
-                    <Ticket className="h-5 w-5 text-primary" />
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={5} className="h-32 text-center">
+                  <div className="flex justify-center items-center">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary/50" />
                   </div>
-                  <div>
-                    <div className="font-mono font-bold text-foreground flex items-center gap-2">
-                      NEWUSER20
+                </TableCell>
+              </TableRow>
+            ) : error ? (
+              <TableRow>
+                <TableCell colSpan={5} className="h-32 text-center text-red-400">
+                  Failed to load coupons.
+                </TableCell>
+              </TableRow>
+            ) : filteredCoupons.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
+                  No coupons found.
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredCoupons.map((coupon: any) => {
+                const isExpired = coupon.expiryDate && new Date(coupon.expiryDate) < new Date();
+                const isActive = coupon.isActive && !isExpired;
+                return (
+                  <TableRow key={coupon.id} className="border-b border-white/[0.03] hover:bg-white/[0.015] transition-colors group">
+                    <TableCell className="px-4 py-3 pl-5">
+                      <div className="flex items-center gap-3">
+                        <div className={`h-10 w-10 rounded-lg flex items-center justify-center border shrink-0 ${isActive ? 'bg-primary/10 border-primary/20' : 'bg-muted border-border opacity-50'}`}>
+                          <Ticket className={`h-5 w-5 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
+                        </div>
+                        <div className={isActive ? '' : 'opacity-50'}>
+                          <div className="font-mono font-bold text-foreground flex items-center gap-2">
+                            {coupon.code}
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity" 
+                              onClick={() => handleCopy(coupon.code)}
+                            >
+                              {copiedCode === coupon.code ? <Check className="h-3 w-3 text-green-500" /> : <CopyIcon className="h-3 w-3 text-muted-foreground" />}
+                            </Button>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {coupon.expiryDate ? `Expires: ${new Date(coupon.expiryDate).toLocaleDateString()}` : 'No expiration'}
+                          </p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className={`px-4 py-3 font-medium ${isActive ? 'text-primary' : 'opacity-50'}`}>
+                      {coupon.discountType === 'percent' ? `${coupon.value}% off` : `₹${coupon.value} off`}
+                    </TableCell>
+                    <TableCell className={`px-4 py-3 ${isActive ? '' : 'opacity-50'}`}>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-sm font-medium">∞</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
+                      <Badge variant="outline" className={`text-[10px] font-medium px-2 py-0.5 rounded-full border-none ${isActive ? 'bg-green-500/10 text-green-500' : 'bg-muted text-muted-foreground'}`}>
+                        {isActive ? 'Active' : (isExpired ? 'Expired' : 'Inactive')}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="px-4 py-3 pr-5 text-right">
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity" 
-                        onClick={() => handleCopy('NEWUSER20')}
+                        onClick={() => deleteMutation.mutate(coupon.id)}
+                        disabled={deleteMutation.isPending}
+                        className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
                       >
-                        {copiedCode === 'NEWUSER20' ? <Check className="h-3 w-3 text-green-500" /> : <CopyIcon className="h-3 w-3 text-muted-foreground" />}
+                        <Trash2 className="h-4 w-4" />
                       </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">Expires: Dec 31, 2023</p>
-                  </div>
-                </div>
-              </TableCell>
-              <TableCell className="px-4 py-3 font-medium text-primary">20% off</TableCell>
-              <TableCell className="px-4 py-3">
-                <div className="flex flex-col gap-1">
-                  <span className="text-sm font-medium">45 <span className="text-muted-foreground font-normal">/ 100</span></span>
-                  <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
-                    <div className="bg-primary h-full rounded-full" style={{ width: '45%' }} />
-                  </div>
-                </div>
-              </TableCell>
-              <TableCell className="px-4 py-3"><Badge variant="outline" className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-green-500/10 text-green-500 border-none">Active</Badge></TableCell>
-              <TableCell className="px-4 py-3 pr-5 text-right">
-                <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10">
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </TableCell>
-            </TableRow>
-            <TableRow className="border-b border-white/[0.03] hover:bg-white/[0.015] transition-colors group">
-              <TableCell className="px-4 py-3 pl-5">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 shrink-0">
-                    <Ticket className="h-5 w-5 text-indigo-500" />
-                  </div>
-                  <div>
-                    <div className="font-mono font-bold text-foreground flex items-center gap-2">
-                      FLAT500
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity" 
-                        onClick={() => handleCopy('FLAT500')}
-                      >
-                        {copiedCode === 'FLAT500' ? <Check className="h-3 w-3 text-green-500" /> : <CopyIcon className="h-3 w-3 text-muted-foreground" />}
-                      </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">No expiration</p>
-                  </div>
-                </div>
-              </TableCell>
-              <TableCell className="px-4 py-3 font-medium text-indigo-500">₹500 off</TableCell>
-              <TableCell className="px-4 py-3">
-                <div className="flex flex-col gap-1">
-                  <span className="text-sm font-medium">120 <span className="text-muted-foreground font-normal">/ ∞</span></span>
-                </div>
-              </TableCell>
-              <TableCell className="px-4 py-3"><Badge variant="outline" className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-green-500/10 text-green-500 border-none">Active</Badge></TableCell>
-              <TableCell className="px-4 py-3 pr-5 text-right">
-                <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10">
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </TableCell>
-            </TableRow>
-            <TableRow className="border-b border-white/[0.03] hover:bg-white/[0.015] transition-colors group">
-              <TableCell className="px-4 py-3 pl-5">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center border border-border shrink-0 opacity-50">
-                    <Ticket className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <div className="opacity-50">
-                    <div className="font-mono font-bold text-foreground">DIWALI10</div>
-                    <p className="text-xs text-muted-foreground">Expired: Nov 15, 2023</p>
-                  </div>
-                </div>
-              </TableCell>
-              <TableCell className="px-4 py-3 font-medium opacity-50">10% off</TableCell>
-              <TableCell className="px-4 py-3 opacity-50">
-                <div className="flex flex-col gap-1">
-                  <span className="text-sm font-medium">85 <span className="text-muted-foreground font-normal">/ 100</span></span>
-                </div>
-              </TableCell>
-              <TableCell className="px-4 py-3"><Badge variant="outline" className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground border-none">Expired</Badge></TableCell>
-              <TableCell className="px-4 py-3 pr-5 text-right">
-                <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10">
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </TableCell>
-            </TableRow>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
           </TableBody>
         </Table>
       </div>

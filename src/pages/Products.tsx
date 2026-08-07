@@ -20,29 +20,54 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { EmptyState } from '@/components/ui/empty-state';
 import { toast } from 'sonner';
-
-const MOCK_PRODUCTS = [
-  { id: 'PROD-001', name: 'Classic Black T-Shirt', category: 'Men / Topwear', price: 999, stock: 120, status: 'ACTIVE', image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=100&q=80' },
-  { id: 'PROD-002', name: 'Vintage Denim Jacket', category: 'Unisex / Outerwear', price: 2499, stock: 45, status: 'ACTIVE', image: 'https://images.unsplash.com/photo-1576995853123-5a10305d93c0?w=100&q=80' },
-  { id: 'PROD-003', name: 'Summer Floral Dress', category: 'Women / Dresses', price: 1899, stock: 0, status: 'OUT_OF_STOCK', image: 'https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?w=100&q=80' },
-  { id: 'PROD-004', name: 'Running Sneakers', category: 'Footwear / Active', price: 3599, stock: 80, status: 'DRAFT', image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=100&q=80' },
-];
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import api from '@/lib/api';
+import { Loader2 } from 'lucide-react';
 
 export function Products() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
-  const [products, setProducts] = useState(MOCK_PRODUCTS);
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['admin-products'],
+    queryFn: async () => {
+      const res = await api.get('/admin/products');
+      if (!res?.data) return [];
+      if (Array.isArray(res.data.data)) return res.data.data;
+      if (res.data.data && Array.isArray(res.data.data.products)) return res.data.data.products;
+      if (Array.isArray(res.data.products)) return res.data.products;
+      if (Array.isArray(res.data)) return res.data;
+      return [];
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/admin/products/${id}`);
+    },
+    onSuccess: (_, _id) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-products'] });
+      toast.success('Product deleted successfully.');
+    },
+    onError: () => {
+      toast.error('Failed to delete product.');
+    }
+  });
+
+  const products = data || [];
 
   const filteredProducts = products.filter(
-    (product) =>
-      product.name.toLowerCase().includes(search.toLowerCase()) ||
-      product.category.toLowerCase().includes(search.toLowerCase()) ||
-      product.id.toLowerCase().includes(search.toLowerCase())
+    (product: any) =>
+      String(product?.name || '').toLowerCase().includes(search.toLowerCase()) ||
+      String(product?.category?.name || product?.category || '').toLowerCase().includes(search.toLowerCase()) ||
+      String(product?.id || product?._id || '').toLowerCase().includes(search.toLowerCase())
   );
 
   const handleDelete = (id: string, name: string) => {
-    setProducts(products.filter(p => p.id !== id));
-    toast.success(`Product "${name}" deleted successfully.`);
+    if (window.confirm(`Are you sure you want to delete ${name}?`)) {
+      deleteMutation.mutate(id);
+    }
   };
 
   return (
@@ -70,7 +95,15 @@ export function Products() {
         </div>
       </div>
 
-      {filteredProducts.length === 0 ? (
+      {isLoading ? (
+        <div className="flex justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : error ? (
+        <div className="text-center py-20 text-red-400 bg-red-400/10 rounded-xl border border-red-400/20">
+          Failed to load products.
+        </div>
+      ) : filteredProducts.length === 0 ? (
         <EmptyState 
           icon={PackageSearch}
           title="No products found"
@@ -97,33 +130,41 @@ export function Products() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredProducts.map((product) => (
-                <TableRow key={product.id} className="border-b border-white/[0.03] hover:bg-white/[0.015] transition-colors group">
+              {filteredProducts.map((product: any) => {
+                const productId = product.id || product._id;
+                const categoryName = typeof product.category === 'object' ? product.category?.name : product.category;
+                const status = product.status || (product.isActive ? 'ACTIVE' : 'DRAFT');
+                const image = product.thumbnail || product.images?.[0] || 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=100&q=80';
+                // stock could be product.stock or sum of variants stock
+                const stock = typeof product.stock === 'number' ? product.stock : (product.variants?.reduce((acc: any, v: any) => acc + (v.stock || 0), 0) || 0);
+
+                return (
+                <TableRow key={productId} className="border-b border-white/[0.03] hover:bg-white/[0.015] transition-colors group">
                   <TableCell className="px-4 py-3 pl-5">
                     <div className="flex items-center gap-4">
                       <div className="relative h-12 w-12 rounded-md overflow-hidden border border-border bg-muted/50">
-                        <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                        <img src={image} alt={product.name} className="w-full h-full object-cover" />
                       </div>
                       <div>
                         <div className="font-semibold text-foreground">{product.name}</div>
-                        <div className="text-xs text-muted-foreground font-mono mt-0.5">{product.id}</div>
+                        <div className="text-xs text-muted-foreground font-mono mt-0.5">{productId}</div>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell className="px-4 py-3">
                     <span className="inline-flex items-center rounded-md bg-secondary/50 px-2 py-1 text-xs font-medium text-secondary-foreground ring-1 ring-inset ring-border/50">
-                      {product.category}
+                      {categoryName || 'Uncategorized'}
                     </span>
                   </TableCell>
-                  <TableCell className="px-4 py-3 font-medium">₹{product.price.toLocaleString()}</TableCell>
+                  <TableCell className="px-4 py-3 font-medium">₹{product.price?.toLocaleString() || 0}</TableCell>
                   <TableCell className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <div className={`h-2 w-2 rounded-full ${
-                        product.stock > 50 ? 'bg-green-500' : 
-                        product.stock > 0 ? 'bg-yellow-500' : 'bg-destructive animate-pulse'
+                        stock > 50 ? 'bg-green-500' : 
+                        stock > 0 ? 'bg-yellow-500' : 'bg-destructive animate-pulse'
                       }`} />
-                      <span className={product.stock === 0 ? 'text-destructive font-semibold' : 'font-medium'}>
-                        {product.stock} units
+                      <span className={stock === 0 ? 'text-destructive font-semibold' : 'font-medium'}>
+                        {stock} units
                       </span>
                     </div>
                   </TableCell>
@@ -131,12 +172,12 @@ export function Products() {
                     <Badge 
                       variant="outline"
                       className={
-                        product.status === 'ACTIVE' ? 'text-[10px] font-medium px-2 py-0.5 rounded-full bg-green-500/10 text-green-500 border-none' : 
-                        product.status === 'DRAFT' ? 'text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground border-none' : 
+                        status === 'ACTIVE' ? 'text-[10px] font-medium px-2 py-0.5 rounded-full bg-green-500/10 text-green-500 border-none' : 
+                        status === 'DRAFT' ? 'text-[10px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground border-none' : 
                         'text-[10px] font-medium px-2 py-0.5 rounded-full bg-destructive/10 text-destructive border-none'
                       }
                     >
-                      {product.status.replace('_', ' ')}
+                      {status?.replace('_', ' ')}
                     </Badge>
                   </TableCell>
                   <TableCell className="px-4 py-3 pr-5 text-right">
@@ -145,11 +186,11 @@ export function Products() {
                         <MoreHorizontal className="h-4 w-4" />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-[160px]">
-                        <DropdownMenuItem onClick={() => navigate(`/products/${product.id}/edit`)} className="cursor-pointer">
+                        <DropdownMenuItem onClick={() => navigate(`/products/${productId}/edit`)} className="cursor-pointer">
                           <Edit className="h-4 w-4 mr-2" /> Edit Details
                         </DropdownMenuItem>
                         <DropdownMenuItem 
-                          onClick={() => handleDelete(product.id, product.name)}
+                          onClick={() => handleDelete(productId, product.name)}
                           className="text-destructive focus:text-destructive cursor-pointer"
                         >
                           <Trash2 className="h-4 w-4 mr-2" /> Delete Product
@@ -158,7 +199,8 @@ export function Products() {
                     </DropdownMenu>
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </div>

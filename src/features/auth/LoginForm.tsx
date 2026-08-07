@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/auth.store';
+import api from '@/lib/api';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,25 +37,29 @@ export function LoginForm() {
     setError('');
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      if (data.email === 'admin@closho.com' && data.password === 'password') {
-        login(
-          { id: '1', name: 'Super Admin', email: data.email, role: 'SUPER_ADMIN' },
-          'mock-jwt-token-123'
-        );
-        navigate('/');
-      } else if (data.email === 'store@closho.com' && data.password === 'password') {
-        login(
-          { id: '2', name: 'Store Admin', email: data.email, role: 'STORE_ADMIN', storeId: 'store_1' },
-          'mock-jwt-token-456'
-        );
+      const response = await api.post('/admin/auth/login', {
+        email: data.email,
+        password: data.password,
+        rememberMe: true,
+      });
+      
+      if (response.data.success) {
+        const { accessToken, user } = response.data.data;
+        // Make sure user role maps correctly or is returned by the API
+        login({
+          id: user.id,
+          fullName: user.fullName || user.name || 'Admin',
+          email: user.email,
+          phone: user.phone,
+          role: user.role || 'SUPER_ADMIN',
+          storeId: user.storeId
+        }, accessToken);
         navigate('/');
       } else {
-        setError('Invalid email or password. Use admin@closho.com / password');
+        setError(response.data.message || 'Login failed. Please check your credentials.');
       }
-    } catch (err) {
-      setError('An unexpected error occurred.');
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }

@@ -21,8 +21,8 @@ const storeSchema = z.object({
   address: z.string().min(5, 'Address is required'),
   city: z.string().min(2, 'City is required'),
   pincode: z.string().min(6, 'Valid pincode required'),
-  latitude: z.string().optional(),
-  longitude: z.string().optional(),
+  latitude: z.string().min(1, 'Latitude is required'),
+  longitude: z.string().min(1, 'Longitude is required'),
   radius: z.coerce.number().min(1, 'Minimum 1km radius'),
   contact: z.string().min(10, 'Valid contact number required'),
 });
@@ -121,12 +121,14 @@ export function StoreFormDialog({ open, onOpenChange, defaultValues }: Props) {
             </div>
             
             <div className="space-y-1.5">
-              <Label htmlFor="latitude" className="text-xs font-medium text-white/30">Latitude <span className="text-white/15">(optional)</span></Label>
+              <Label htmlFor="latitude" className="text-xs font-medium text-white/40">Latitude</Label>
               <Input id="latitude" {...register('latitude')} placeholder="19.0760" className={inputClass} />
+              {errors.latitude && <p className="text-[11px] text-red-400/80">{errors.latitude.message}</p>}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="longitude" className="text-xs font-medium text-white/30">Longitude <span className="text-white/15">(optional)</span></Label>
+              <Label htmlFor="longitude" className="text-xs font-medium text-white/40">Longitude</Label>
               <Input id="longitude" {...register('longitude')} placeholder="72.8777" className={inputClass} />
+              {errors.longitude && <p className="text-[11px] text-red-400/80">{errors.longitude.message}</p>}
             </div>
             
             <div className="space-y-1.5">

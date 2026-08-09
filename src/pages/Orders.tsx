@@ -46,7 +46,7 @@ export function Orders() {
 
   const filteredOrders = orders.filter((o: any) => {
     const orderId = o.id || o._id || o.orderNumber;
-    const customerName = o.customer?.name || o.customer?.fullName || 'Unknown Customer';
+    const customerName = o.user?.fullName || o.user?.name || o.shippingAddress?.fullName || 'Unknown Customer';
     
     const matchesSearch = String(orderId || '').toLowerCase().includes(search.toLowerCase()) || String(customerName || '').toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'ALL' || o.status === statusFilter;
@@ -131,8 +131,8 @@ export function Orders() {
             <TableBody>
               {filteredOrders.map((order: any) => {
                 const orderId = order.id || order._id || order.orderNumber;
+                const customerName = order.user?.fullName || order.user?.name || order.shippingAddress?.fullName || 'Unknown';
                 const orderDate = new Date(order.createdAt || order.date || Date.now());
-                const customerName = order.customer?.name || order.customer?.fullName || 'Unknown Customer';
                 const storeName = order.store?.name || order.store || 'Main Store';
                 const total = typeof order.total === 'number' ? order.total : (order.amount || 0);
                 const paymentMethod = order.payment?.method || order.paymentMethod || order.payment || 'N/A';

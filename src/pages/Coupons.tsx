@@ -17,6 +17,11 @@ export function Coupons() {
   const [isOpen, setIsOpen] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   
+  // Form State
+  const [newCode, setNewCode] = useState('');
+  const [discountType, setDiscountType] = useState('percent');
+  const [discountValue, setDiscountValue] = useState('');
+  
   const handleCopy = (code: string) => {
     navigator.clipboard.writeText(code);
     setCopiedCode(code);
@@ -46,6 +51,33 @@ export function Coupons() {
     },
     onError: () => {
       toast.error('Failed to delete coupon');
+    }
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        code: newCode,
+        discountType,
+        value: parseFloat(discountValue),
+        minOrderAmount: 0,
+        maxDiscount: 1000,
+        validFrom: new Date().toISOString(),
+        validUntil: new Date(Date.now() + 30 * 86400000).toISOString(), // 30 days
+        usageLimit: 100,
+        isActive: true
+      };
+      await api.post('/admin/coupons', payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-coupons'] });
+      toast.success('Coupon created successfully');
+      setIsOpen(false);
+      setNewCode('');
+      setDiscountValue('');
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to create coupon');
     }
   });
 
@@ -80,7 +112,12 @@ export function Coupons() {
               <div className="space-y-2">
                 <Label className="font-semibold">Coupon Code *</Label>
                 <div className="relative">
-                  <Input placeholder="e.g. SUMMER50" className="uppercase font-mono tracking-wider focus-visible:ring-primary pl-10" />
+                  <Input 
+                    placeholder="e.g. SUMMER50" 
+                    value={newCode}
+                    onChange={(e) => setNewCode(e.target.value.toUpperCase())}
+                    className="uppercase font-mono tracking-wider focus-visible:ring-primary pl-10" 
+                  />
                   <Percent className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 </div>
                 <p className="text-xs text-muted-foreground">Customers will enter this code at checkout.</p>
@@ -88,19 +125,25 @@ export function Coupons() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="font-semibold">Discount Type</Label>
-                  <Select defaultValue="percentage">
+                  <Select value={discountType} onValueChange={(val) => setDiscountType(val || 'percent')}>
                     <SelectTrigger className="focus:ring-primary">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="percentage">Percentage (%)</SelectItem>
-                      <SelectItem value="fixed">Flat Amount (₹)</SelectItem>
+                      <SelectItem value="percent">Percentage (%)</SelectItem>
+                      <SelectItem value="flat">Flat Amount (₹)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
                   <Label className="font-semibold">Value *</Label>
-                  <Input type="number" placeholder="50" className="focus-visible:ring-primary" />
+                  <Input 
+                    type="number" 
+                    placeholder="50" 
+                    value={discountValue}
+                    onChange={(e) => setDiscountValue(e.target.value)}
+                    className="focus-visible:ring-primary" 
+                  />
                 </div>
               </div>
               <div className="space-y-2 pt-2">
@@ -119,7 +162,14 @@ export function Coupons() {
             </div>
             <DialogFooter className="mt-6 border-t border-border/50 pt-4">
               <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
-              <Button onClick={() => { setIsOpen(false); toast.success('Coupon created successfully!'); }} className="bg-primary text-primary-foreground">Save Coupon</Button>
+              <Button 
+                onClick={() => createMutation.mutate()} 
+                disabled={createMutation.isPending || !newCode || !discountValue}
+                className="bg-primary text-primary-foreground"
+              >
+                {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Save Coupon
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

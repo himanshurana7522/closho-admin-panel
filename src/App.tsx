@@ -13,6 +13,9 @@ import { Reels } from '@/pages/Reels';
 import { Coupons } from '@/pages/Coupons';
 import { Customers } from '@/pages/Customers';
 import { Settings } from '@/pages/Settings';
+import { Categories } from '@/pages/Categories';
+import { Banners } from '@/pages/Banners';
+import { SalesReport } from '@/pages/SalesReport';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
@@ -40,13 +43,16 @@ function App() {
               <Route path="products" element={<Products />} />
               <Route path="products/new" element={<ProductCreate />} />
               <Route path="products/:id/edit" element={<ProductCreate />} />
+              <Route path="categories" element={<Categories />} />
               
               <Route path="stock" element={<Stock />} />
               
               <Route path="orders" element={<Orders />} />
               <Route path="orders/:id" element={<OrderDetail />} />
+              <Route path="sales" element={<SalesReport />} />
               
               <Route path="reels" element={<Reels />} />
+              <Route path="banners" element={<Banners />} />
               <Route path="coupons" element={<Coupons />} />
               <Route path="customers" element={<Customers />} />
               <Route path="settings" element={<Settings />} />

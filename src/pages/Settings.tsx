@@ -1,15 +1,80 @@
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import api from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
-import { Settings as SettingsIcon, User, Users, CreditCard, ShieldCheck } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { User, Users, CreditCard, ShieldCheck, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuthStore } from '@/store/auth.store';
 
 export function Settings() {
-  const handleSave = () => {
-    toast.success('Settings saved successfully!');
+  const { user } = useAuthStore();
+  const queryClient = useQueryClient();
+
+  // Fetch Settings
+  const { data: payments = {}, isLoading: isPaymentsLoading } = useQuery({
+    queryKey: ['admin-settings-payments'],
+    queryFn: async () => {
+      const res = await api.get('/admin/settings/payments');
+      return res.data.data || {};
+    }
+  });
+
+  const { data: config = {}, isLoading: isConfigLoading } = useQuery({
+    queryKey: ['admin-settings-config'],
+    queryFn: async () => {
+      const res = await api.get('/admin/settings/config');
+      return res.data.data || {};
+    }
+  });
+
+  // Local state for Payments
+  const [payState, setPayState] = useState<any>({});
+  useEffect(() => {
+    if (Object.keys(payments).length > 0) {
+      setPayState(payments);
+    }
+  }, [payments]);
+
+  // Local state for Config
+  const [configState, setConfigState] = useState<any>({});
+  useEffect(() => {
+    if (Object.keys(config).length > 0) {
+      setConfigState(config);
+    }
+  }, [config]);
+
+  // Mutations
+  const payMutation = useMutation({
+    mutationFn: async (payload: any) => api.put('/admin/settings/payments', payload),
+    onSuccess: () => {
+      toast.success('Payment settings updated successfully');
+      queryClient.invalidateQueries({ queryKey: ['admin-settings-payments'] });
+    },
+    onError: () => toast.error('Failed to update payment settings')
+  });
+
+  const configMutation = useMutation({
+    mutationFn: async (payload: any) => api.put('/admin/settings/config', payload),
+    onSuccess: () => {
+      toast.success('App configuration updated successfully');
+      queryClient.invalidateQueries({ queryKey: ['admin-settings-config'] });
+    },
+    onError: () => toast.error('Failed to update configuration')
+  });
+
+  const isLoading = isPaymentsLoading || isConfigLoading;
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-[50vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
   }
 
   return (
@@ -35,16 +100,17 @@ export function Settings() {
           </TabsTrigger>
         </TabsList>
         
+        {/* PROFILE TAB */}
         <TabsContent value="profile" className="mt-0 outline-none">
           <Card className="bg-[#0A0A0A] border border-white/[0.04] rounded-xl shadow-none">
             <CardHeader className="pb-6">
               <CardTitle className="text-lg text-white font-medium">Personal Information</CardTitle>
-              <CardDescription className="text-white/50">Update your personal details and contact info.</CardDescription>
+              <CardDescription className="text-white/50">Update your personal details.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-8">
               <div className="flex items-center gap-6">
                 <div className="h-16 w-16 rounded-full bg-white/[0.03] border border-white/[0.06] flex items-center justify-center text-white/80 font-medium text-xl">
-                  SA
+                  {user?.fullName?.substring(0, 2).toUpperCase() || 'AD'}
                 </div>
                 <div>
                   <Button variant="outline" size="sm" className="bg-white/[0.03] border-white/[0.06] text-white/60 hover:text-white/80 rounded-lg transition-all duration-200 mb-2">Change Avatar</Button>
@@ -55,116 +121,185 @@ export function Settings() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-3">
                   <Label className="text-xs font-medium text-white/40 uppercase tracking-wider">Full Name</Label>
-                  <Input defaultValue="Super Admin" className="bg-white/[0.03] border-white/[0.06] focus-visible:ring-primary/30 focus-visible:border-primary/50 text-white rounded-lg transition-all duration-200" />
+                  <Input defaultValue={user?.fullName || 'Admin User'} readOnly className="bg-white/[0.03] border-white/[0.06] focus-visible:ring-primary/30 focus-visible:border-primary/50 text-white rounded-lg transition-all duration-200" />
                 </div>
                 <div className="space-y-3">
                   <Label className="text-xs font-medium text-white/40 uppercase tracking-wider">Email Address</Label>
-                  <Input defaultValue="admin@closho.com" disabled className="bg-white/[0.02] border-white/[0.04] text-white/40 cursor-not-allowed rounded-lg" />
-                  <p className="text-[11px] text-white/30">Email cannot be changed.</p>
-                </div>
-              </div>
-
-              <div className="pt-2">
-                <Button onClick={handleSave} className="bg-primary text-primary-foreground font-medium text-xs rounded-lg px-5 py-2 transition-all duration-200 hover:opacity-90">Save Profile</Button>
-              </div>
-
-              <div className="h-px w-full bg-white/[0.04] my-8" />
-              
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg text-white font-medium mb-1">Change Password</h3>
-                  <p className="text-sm text-white/50">Ensure your account is using a long, random password to stay secure.</p>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-3">
-                    <Label className="text-xs font-medium text-white/40 uppercase tracking-wider">Current Password</Label>
-                    <Input type="password" placeholder="••••••••" className="bg-white/[0.03] border-white/[0.06] focus-visible:ring-primary/30 focus-visible:border-primary/50 text-white rounded-lg transition-all duration-200" />
-                  </div>
-                  <div className="space-y-3">
-                    <Label className="text-xs font-medium text-white/40 uppercase tracking-wider">New Password</Label>
-                    <Input type="password" placeholder="••••••••" className="bg-white/[0.03] border-white/[0.06] focus-visible:ring-primary/30 focus-visible:border-primary/50 text-white rounded-lg transition-all duration-200" />
-                  </div>
-                  <div className="space-y-3">
-                    <Label className="text-xs font-medium text-white/40 uppercase tracking-wider">Confirm New Password</Label>
-                    <Input type="password" placeholder="••••••••" className="bg-white/[0.03] border-white/[0.06] focus-visible:ring-primary/30 focus-visible:border-primary/50 text-white rounded-lg transition-all duration-200" />
-                  </div>
-                </div>
-                
-                <div className="pt-2">
-                  <Button variant="outline" onClick={handleSave} className="bg-white/[0.03] border-white/[0.06] text-white/60 hover:text-white/80 rounded-lg px-5 py-2 transition-all duration-200">Update Password</Button>
+                  <Input defaultValue={user?.email || 'admin@example.com'} readOnly className="bg-white/[0.03] border-white/[0.06] focus-visible:ring-primary/30 focus-visible:border-primary/50 text-white rounded-lg transition-all duration-200" />
                 </div>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
-        
+
+        {/* TEAM TAB */}
+        <TabsContent value="team" className="mt-0 outline-none">
+          <Card className="bg-[#0A0A0A] border border-white/[0.04] rounded-xl shadow-none">
+            <CardContent className="py-20 text-center">
+              <Users className="h-12 w-12 text-white/10 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-white mb-2">Team Management</h3>
+              <p className="text-sm text-white/40 max-w-md mx-auto mb-6">Invite team members and manage their roles and permissions across your stores.</p>
+              <Button disabled className="bg-primary text-primary-foreground text-xs font-medium">Invite Member</Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* PAYMENTS TAB */}
         <TabsContent value="payment" className="mt-0 outline-none">
           <Card className="bg-[#0A0A0A] border border-white/[0.04] rounded-xl shadow-none">
             <CardHeader className="pb-6">
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle className="text-lg text-white font-medium">Razorpay Integration</CardTitle>
-                  <CardDescription className="text-white/50 mt-1">Configure your payment gateway API keys.</CardDescription>
-                </div>
-                <Badge variant="outline" className="bg-green-500/10 text-green-400 border-green-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 font-medium text-xs">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-400"></span> Connected
-                </Badge>
-              </div>
+              <CardTitle className="text-lg text-white font-medium">Payment Gateways</CardTitle>
+              <CardDescription className="text-white/50">Configure payment providers and COD rules.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="space-y-3 max-w-xl">
-                <Label className="text-xs font-medium text-white/40 uppercase tracking-wider">Key ID</Label>
-                <Input type="text" defaultValue="rzp_live_x1y2z3a4b5c6d7e8" className="font-mono bg-white/[0.03] border-white/[0.06] focus-visible:ring-primary/30 focus-visible:border-primary/50 text-white rounded-lg transition-all duration-200" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <Label className="text-xs font-medium text-white/40 uppercase tracking-wider">Razorpay Key ID</Label>
+                  <Input 
+                    value={payState.razorpayKeyId || ''} 
+                    onChange={e => setPayState({...payState, razorpayKeyId: e.target.value})}
+                    placeholder="rzp_test_..."
+                    className="bg-white/[0.03] border-white/[0.06] text-white rounded-lg" 
+                  />
+                </div>
+                <div className="space-y-3">
+                  <Label className="text-xs font-medium text-white/40 uppercase tracking-wider">Razorpay Enabled</Label>
+                  <div className="flex items-center h-10">
+                    <Switch checked={payState.razorpayEnabled || false} onCheckedChange={c => setPayState({...payState, razorpayEnabled: c})} />
+                  </div>
+                </div>
+                
+                <div className="space-y-3">
+                  <Label className="text-xs font-medium text-white/40 uppercase tracking-wider">COD Enabled</Label>
+                  <div className="flex items-center h-10">
+                    <Switch checked={payState.codEnabled || false} onCheckedChange={c => setPayState({...payState, codEnabled: c})} />
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <Label className="text-xs font-medium text-white/40 uppercase tracking-wider">UPI Enabled</Label>
+                  <div className="flex items-center h-10">
+                    <Switch checked={payState.upiEnabled || false} onCheckedChange={c => setPayState({...payState, upiEnabled: c})} />
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-xs font-medium text-white/40 uppercase tracking-wider">Min Order for COD (₹)</Label>
+                  <Input 
+                    type="number"
+                    value={payState.minOrderForCod || 0} 
+                    onChange={e => setPayState({...payState, minOrderForCod: Number(e.target.value)})}
+                    className="bg-white/[0.03] border-white/[0.06] text-white rounded-lg" 
+                  />
+                </div>
+                <div className="space-y-3">
+                  <Label className="text-xs font-medium text-white/40 uppercase tracking-wider">Max Order for COD (₹)</Label>
+                  <Input 
+                    type="number"
+                    value={payState.maxOrderForCod || 0} 
+                    onChange={e => setPayState({...payState, maxOrderForCod: Number(e.target.value)})}
+                    className="bg-white/[0.03] border-white/[0.06] text-white rounded-lg" 
+                  />
+                </div>
               </div>
-              <div className="space-y-3 max-w-xl">
-                <Label className="text-xs font-medium text-white/40 uppercase tracking-wider flex justify-between">
-                  Key Secret
-                  <span className="font-normal text-[10px] text-white/40 hover:text-white/80 cursor-pointer transition-colors">SHOW SECRET</span>
-                </Label>
-                <Input type="password" defaultValue="xxxxxxxxxxxxxxxxxxxx" className="font-mono bg-white/[0.03] border-white/[0.06] focus-visible:ring-primary/30 focus-visible:border-primary/50 text-white rounded-lg transition-all duration-200" />
+
+              <div className="pt-4 border-t border-white/[0.04] flex justify-end">
+                <Button 
+                  onClick={() => payMutation.mutate(payState)} 
+                  disabled={payMutation.isPending}
+                  className="bg-primary text-primary-foreground text-xs font-medium"
+                >
+                  {payMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                  Save Payment Settings
+                </Button>
               </div>
-              <div className="pt-4">
-                <Button onClick={handleSave} className="bg-primary text-primary-foreground font-medium text-xs rounded-lg px-5 py-2 transition-all duration-200 hover:opacity-90">Save API Keys</Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="team" className="mt-0 outline-none">
-          <Card className="bg-[#0A0A0A] border border-white/[0.04] rounded-xl shadow-none">
-            <CardHeader className="pb-6 flex flex-row items-center justify-between border-b border-white/[0.04]">
-              <div>
-                <CardTitle className="text-lg text-white font-medium">Team Members</CardTitle>
-                <CardDescription className="text-white/50">Manage who has access to this dashboard.</CardDescription>
-              </div>
-              <Button size="sm" className="bg-primary text-primary-foreground font-medium text-xs rounded-lg transition-all duration-200 hover:opacity-90">Add Member</Button>
-            </CardHeader>
-            <CardContent className="pt-12 pb-16 text-center flex flex-col items-center">
-              <div className="h-16 w-16 rounded-full bg-white/[0.02] border border-white/[0.04] flex items-center justify-center mb-4">
-                <Users className="h-6 w-6 text-white/20" />
-              </div>
-              <h3 className="text-white font-medium mb-1">No team members yet</h3>
-              <p className="text-sm text-white/40">Team management will be available in the next update.</p>
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* APP CONFIG TAB */}
         <TabsContent value="config" className="mt-0 outline-none">
           <Card className="bg-[#0A0A0A] border border-white/[0.04] rounded-xl shadow-none">
-            <CardHeader className="pb-6 border-b border-white/[0.04]">
-              <CardTitle className="text-lg text-white font-medium">App Configuration</CardTitle>
-              <CardDescription className="text-white/50">Global settings for the Closho Customer App.</CardDescription>
+            <CardHeader className="pb-6">
+              <CardTitle className="text-lg text-white font-medium">Application Configuration</CardTitle>
+              <CardDescription className="text-white/50">Manage global app behavior like delivery fees and taxes.</CardDescription>
             </CardHeader>
-            <CardContent className="pt-12 pb-16 text-center flex flex-col items-center">
-              <div className="h-16 w-16 rounded-full bg-white/[0.02] border border-white/[0.04] flex items-center justify-center mb-4">
-                <SettingsIcon className="h-6 w-6 text-white/20" />
+            <CardContent className="space-y-6">
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <Label className="text-xs font-medium text-white/40 uppercase tracking-wider">Tax Percentage (%)</Label>
+                  <Input 
+                    type="number"
+                    value={configState.taxPercentage || 0} 
+                    onChange={e => setConfigState({...configState, taxPercentage: Number(e.target.value)})}
+                    className="bg-white/[0.03] border-white/[0.06] text-white rounded-lg" 
+                  />
+                </div>
+                <div className="space-y-3">
+                  <Label className="text-xs font-medium text-white/40 uppercase tracking-wider">Default Currency</Label>
+                  <Input 
+                    value={configState.defaultCurrency || ''} 
+                    onChange={e => setConfigState({...configState, defaultCurrency: e.target.value})}
+                    placeholder="e.g. INR"
+                    className="bg-white/[0.03] border-white/[0.06] text-white rounded-lg uppercase" 
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-xs font-medium text-white/40 uppercase tracking-wider">Delivery Charges (₹)</Label>
+                  <Input 
+                    type="number"
+                    value={configState.deliveryCharges || 0} 
+                    onChange={e => setConfigState({...configState, deliveryCharges: Number(e.target.value)})}
+                    className="bg-white/[0.03] border-white/[0.06] text-white rounded-lg" 
+                  />
+                </div>
+                <div className="space-y-3">
+                  <Label className="text-xs font-medium text-white/40 uppercase tracking-wider">Free Delivery Above (₹)</Label>
+                  <Input 
+                    type="number"
+                    value={configState.freeDeliveryAbove || 0} 
+                    onChange={e => setConfigState({...configState, freeDeliveryAbove: Number(e.target.value)})}
+                    className="bg-white/[0.03] border-white/[0.06] text-white rounded-lg" 
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="text-xs font-medium text-white/40 uppercase tracking-wider">Allow User Registration</Label>
+                  <div className="flex items-center h-10">
+                    <Switch checked={configState.allowRegistration || false} onCheckedChange={c => setConfigState({...configState, allowRegistration: c})} />
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <Label className="text-xs font-medium text-white/40 uppercase tracking-wider">Require Email Verification</Label>
+                  <div className="flex items-center h-10">
+                    <Switch checked={configState.requireEmailVerification || false} onCheckedChange={c => setConfigState({...configState, requireEmailVerification: c})} />
+                  </div>
+                </div>
+                
+                <div className="space-y-3">
+                  <Label className="text-xs font-medium text-white/40 uppercase tracking-wider">Maintenance Mode</Label>
+                  <div className="flex items-center h-10">
+                    <Switch checked={configState.maintenanceMode || false} onCheckedChange={c => setConfigState({...configState, maintenanceMode: c})} />
+                  </div>
+                </div>
               </div>
-              <h3 className="text-white font-medium mb-1">Coming Soon</h3>
-              <p className="text-sm text-white/40">Global app configuration settings will appear here.</p>
+
+              <div className="pt-4 border-t border-white/[0.04] flex justify-end">
+                <Button 
+                  onClick={() => configMutation.mutate(configState)} 
+                  disabled={configMutation.isPending}
+                  className="bg-primary text-primary-foreground text-xs font-medium"
+                >
+                  {configMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                  Save Configuration
+                </Button>
+              </div>
+
             </CardContent>
           </Card>
         </TabsContent>
+
       </Tabs>
     </div>
   );

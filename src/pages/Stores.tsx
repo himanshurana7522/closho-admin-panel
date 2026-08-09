@@ -19,7 +19,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { Loader2 } from 'lucide-react';
 
-// Mock data
 export function Stores() {
   const { user } = useAuthStore();
   const [isDialogOpen, setIsDialogOpen] = useState(false);

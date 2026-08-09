@@ -11,7 +11,10 @@ import {
   Users, 
   Settings,
   LogOut,
-  ChevronRight
+  ChevronRight,
+  FolderTree,
+  Image as ImageIcon,
+  BarChart
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -26,12 +29,14 @@ const NAV_SECTIONS = [
     label: 'Catalog',
     items: [
       { name: 'Products', path: '/products', icon: Package, roles: ['SUPER_ADMIN', 'STORE_ADMIN'] },
+      { name: 'Categories', path: '/categories', icon: FolderTree, roles: ['SUPER_ADMIN', 'STORE_ADMIN'] },
       { name: 'Stock', path: '/stock', icon: Boxes, roles: ['SUPER_ADMIN', 'STORE_ADMIN'] },
     ],
   },
   {
     label: 'Sales',
     items: [
+      { name: 'Sales Report', path: '/sales', icon: BarChart, roles: ['SUPER_ADMIN', 'STORE_ADMIN'] },
       { name: 'Orders', path: '/orders', icon: ShoppingCart, roles: ['SUPER_ADMIN', 'STORE_ADMIN'] },
       { name: 'Coupons', path: '/coupons', icon: Ticket, roles: ['SUPER_ADMIN', 'STORE_ADMIN'] },
     ],
@@ -40,6 +45,7 @@ const NAV_SECTIONS = [
     label: 'Engagement',
     items: [
       { name: 'Stores', path: '/stores', icon: Store, roles: ['SUPER_ADMIN', 'STORE_ADMIN'] },
+      { name: 'Banners', path: '/banners', icon: ImageIcon, roles: ['SUPER_ADMIN', 'STORE_ADMIN'] },
       { name: 'Reels', path: '/reels', icon: Video, roles: ['SUPER_ADMIN', 'STORE_ADMIN'] },
       { name: 'Customers', path: '/customers', icon: Users, roles: ['SUPER_ADMIN', 'STORE_ADMIN'] },
     ],

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowLeft, UploadCloud, Plus, Trash2, CheckCircle2, Loader2, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, CheckCircle2, Loader2, Image as ImageIcon, UploadCloud } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import api from '@/lib/api';
@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 const productSchema = z.object({
   name: z.string().min(2, 'Name is required'),
   description: z.string().min(10, 'Description must be at least 10 characters'),
-  category: z.string().min(1, 'Category is required'),
+  categoryId: z.string().min(1, 'Category is required'),
   brand: z.string().optional(),
   basePrice: z.coerce.number().min(0, 'Price must be positive'),
   discountedPrice: z.coerce.number().optional(),
@@ -34,14 +34,15 @@ export function ProductCreate() {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEditing = !!id;
-  const [dragActive, setDragActive] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [images, setImages] = useState<string[]>([]);
   const [sizes, setSizes] = useState<string[]>(['S', 'M', 'L', 'XL']);
   const [colors, setColors] = useState<string[]>(['Black', 'White']);
   const [newSize, setNewSize] = useState('');
   const [newColor, setNewColor] = useState('');
 
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<ProductFormValues>({
+  const { register, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: {
       isActive: true,
@@ -76,7 +77,7 @@ export function ProductCreate() {
       reset({
         name: productData.name || '',
         description: productData.description || '',
-        category: productData.category?.id || productData.category || '',
+        categoryId: productData.category?.id || productData.category || '',
         brand: productData.brand || '',
         basePrice: productData.price || productData.basePrice || 0,
         discountedPrice: productData.discountedPrice,
@@ -96,23 +97,34 @@ export function ProductCreate() {
     }
   }, [isEditing, productData, reset]);
 
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      toast.success("Images uploaded successfully!");
-      setImages([...images, URL.createObjectURL(e.dataTransfer.files[0])]);
+    const formData = new FormData();
+    for (let i = 0; i < files.length; i++) {
+      formData.append('images', files[i]);
+    }
+
+    setIsUploading(true);
+    try {
+      const res = await api.post('/admin/products/upload-images', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      if (res.data?.data?.urls) {
+        setImages((prev) => [...prev, ...res.data.data.urls]);
+        toast.success(res.data.data.message || 'Images uploaded successfully');
+      }
+    } catch (err: any) {
+      console.error('Upload error:', err);
+      toast.error(err.response?.data?.message || 'Failed to upload images');
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -138,22 +150,37 @@ export function ProductCreate() {
         return await api.post('/admin/products', data);
       }
     },
-    onSuccess: () => {
+    onSuccess: (response) => {
+      console.log('=== ADMIN CREATE PRODUCT RESPONSE ===');
+      console.log(JSON.stringify(response.data, null, 2));
       toast.success(`Product ${isEditing ? 'updated' : 'created'} successfully!`);
       navigate('/products');
     },
     onError: (err: any) => {
+      console.error('=== ADMIN CREATE PRODUCT ERROR ===');
+      console.error(err.response?.data || err.message);
       toast.error(err.response?.data?.message || 'Failed to save product');
     }
   });
 
+  const generateSlug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+
   const onSubmit = async (data: ProductFormValues) => {
+    const slug = generateSlug(data.name);
+    const brandPrefix = (data.brand || 'PROD').toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 4);
+
     const payload = {
       ...data,
+      slug,
       price: data.basePrice,
       images,
-      variants: colors.flatMap(color => sizes.map(size => ({ size, color, stock: 10, price: data.basePrice })))
+      variants: colors.flatMap(color => sizes.map(size => {
+        const sku = `${brandPrefix}-${size}-${color}`.toUpperCase().replace(/[^A-Z0-9-]/g, '');
+        return { size, color, stock: 10, price: data.basePrice, sku };
+      }))
     };
+    console.log('=== ADMIN CREATE PRODUCT PAYLOAD ===');
+    console.log(JSON.stringify(payload, null, 2));
     saveMutation.mutate(payload);
   };
 
@@ -222,7 +249,7 @@ export function ProductCreate() {
                 <div className="space-y-1.5">
                   <Label htmlFor="category" className={labelClass}>Category *</Label>
                   {categoriesData?.length ? (
-                    <Select onValueChange={(val) => reset({ ...productData, category: val })} defaultValue={productData?.category?.id || productData?.category}>
+                    <Select onValueChange={(val) => setValue('categoryId', val, { shouldValidate: true })} defaultValue={productData?.category?.id || productData?.categoryId}>
                       <SelectTrigger className={inputClass}>
                         <SelectValue placeholder="Select a category" />
                       </SelectTrigger>
@@ -233,9 +260,9 @@ export function ProductCreate() {
                       </SelectContent>
                     </Select>
                   ) : (
-                    <Input id="category" {...register('category')} placeholder="e.g. Men / T-Shirts" className={inputClass} />
+                    <Input id="category" {...register('categoryId')} placeholder="e.g. Men / T-Shirts" className={inputClass} />
                   )}
-                  {errors.category && <p className="text-[11px] text-red-400/80">{errors.category.message}</p>}
+                  {errors.categoryId && <p className="text-[11px] text-red-400/80">{errors.categoryId.message}</p>}
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="brand" className={labelClass}>Brand</Label>
@@ -253,24 +280,34 @@ export function ProductCreate() {
             </div>
             <div className="p-5">
               <div 
-                className={`border border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center transition-all cursor-pointer ${
-                  dragActive ? 'border-primary/60 bg-primary/5' : 'border-white/[0.08] hover:border-white/[0.15] hover:bg-white/[0.02]'
-                }`}
-                onDragEnter={handleDrag}
-                onDragLeave={handleDrag}
-                onDragOver={handleDrag}
-                onDrop={handleDrop}
+                className={`border-2 border-dashed border-white/[0.1] hover:border-white/[0.2] hover:bg-white/[0.02] rounded-xl p-8 text-center transition-all cursor-pointer ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}
+                onClick={() => fileInputRef.current?.click()}
               >
-                <div className="h-12 w-12 rounded-full bg-white/[0.04] flex items-center justify-center mb-3">
-                  <UploadCloud className="h-5 w-5 text-white/20" />
+                <div className="flex flex-col items-center justify-center gap-3">
+                  <div className="h-12 w-12 rounded-full bg-white/[0.03] flex items-center justify-center">
+                    {isUploading ? (
+                      <Loader2 className="h-6 w-6 text-white/40 animate-spin" />
+                    ) : (
+                      <UploadCloud className="h-6 w-6 text-white/40" />
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-semibold text-white/90">
+                      {isUploading ? 'Uploading...' : 'Click to upload files'}
+                    </h4>
+                    <p className="text-[11px] text-white/40">
+                      JPG, PNG, WebP up to 5MB each.
+                    </p>
+                  </div>
                 </div>
-                <h3 className="font-medium text-sm text-white/60">Drag & drop images here</h3>
-                <p className="text-[11px] text-white/20 mt-1 mb-4 max-w-sm">
-                  Support for JPG, PNG, WEBP. Max file size 5MB.
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button type="button" className="text-xs h-8 px-4 bg-white/[0.03] border border-white/[0.06] text-white/60 pointer-events-none">Select Files</Button>
-                </div>
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  className="hidden" 
+                  multiple 
+                  accept="image/*" 
+                  onChange={handleFileUpload} 
+                />
               </div>
               
               {images.length > 0 && (

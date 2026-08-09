@@ -5,15 +5,12 @@ import { Search, Mail, Phone, ExternalLink, ArrowUpRight, Star } from 'lucide-re
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
-const MOCK_CUSTOMERS = [
-  { id: '1', name: 'Rahul Sharma', initial: 'RS', isVip: true, joinDate: 'Oct 2023', email: 'rahul@example.com', phone: '+91 98765 43210', orders: 12, spent: '₹45,230', color: 'primary' },
-  { id: '2', name: 'Priya Patel', initial: 'PP', isVip: false, joinDate: 'Aug 2023', email: 'priya.p@example.com', phone: '+91 87654 32109', orders: 4, spent: '₹12,450', color: 'blue-500' }
-];
+const customersData: any[] = [];
 
 export function Customers() {
   const [search, setSearch] = useState('');
   
-  const filteredCustomers = MOCK_CUSTOMERS.filter(
+  const filteredCustomers = customersData.filter(
     (customer) =>
       customer.name.toLowerCase().includes(search.toLowerCase()) ||
       customer.email.toLowerCase().includes(search.toLowerCase()) ||

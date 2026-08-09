@@ -1,4 +1,4 @@
-import { Bell, Search, LogOut, Menu } from 'lucide-react';
+import { Bell, Search, LogOut, Menu, Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,6 +10,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import api from '@/lib/api';
+import { toast } from 'sonner';
 
 const ROUTE_TITLES: Record<string, string> = {
   '/': 'Dashboard',
@@ -18,7 +21,10 @@ const ROUTE_TITLES: Record<string, string> = {
   '/products/new': 'New Product',
   '/stock': 'Stock Management',
   '/orders': 'Orders',
+  '/sales': 'Sales Report',
   '/reels': 'Reels',
+  '/banners': 'Banners',
+  '/categories': 'Categories',
   '/coupons': 'Coupons',
   '/customers': 'Customers',
   '/settings': 'Settings',
@@ -32,6 +38,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
 
   const handleLogout = () => {
     logout();
@@ -42,6 +49,54 @@ export function Header({ onMenuClick }: HeaderProps) {
   const pageTitle = ROUTE_TITLES[location.pathname] || 
     (location.pathname.startsWith('/orders/') ? `Order ${location.pathname.split('/').pop()}` : 
      location.pathname.startsWith('/products/') ? 'Edit Product' : 'Page');
+
+  // Notifications
+  const { data: notifData, isLoading: isNotifLoading } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/notifications');
+        return res.data.data || res.data;
+      } catch (err) {
+        return { notifications: [], unreadCount: 0 };
+      }
+    },
+    refetchInterval: 30000 // Poll every 30 seconds
+  });
+
+  const notifications = notifData?.notifications || [];
+  const unreadCount = notifData?.unreadCount || 0;
+
+  const markAsReadMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await api.patch(`/notifications/${id}/read`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    }
+  });
+
+  const markAllReadMutation = useMutation({
+    mutationFn: async () => {
+      return await api.post('/notifications/read-all');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      toast.success('All notifications marked as read');
+    }
+  });
+
+  const handleNotificationClick = (n: any) => {
+    if (!n.isRead) {
+      markAsReadMutation.mutate(n.id || n._id);
+    }
+    // Navigate if there's a link (like an order)
+    if (n.type === 'ORDER_PLACED' || n.type === 'ORDER_STATUS_CHANGED') {
+      if (n.data?.orderId) {
+        navigate(`/orders/${n.data.orderId}`);
+      }
+    }
+  };
 
   return (
     <header className="h-14 border-b border-white/[0.04] bg-black/40 backdrop-blur-xl px-5 flex items-center justify-between sticky top-0 z-30">
@@ -70,10 +125,70 @@ export function Header({ onMenuClick }: HeaderProps) {
 
       {/* Right: actions */}
       <div className="flex items-center gap-1">
-        <Button variant="ghost" size="icon" className="relative text-white/30 hover:text-white/60 h-8 w-8 rounded-lg hover:bg-white/[0.04]">
-          <Bell className="h-4 w-4" />
-          <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-primary"></span>
-        </Button>
+        
+        {/* Notifications Dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger className="relative text-white/30 hover:text-white/60 h-8 w-8 rounded-lg hover:bg-white/[0.04] outline-none inline-flex items-center justify-center">
+              <Bell className="h-4 w-4" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary border border-black animate-pulse"></span>
+              )}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-80 bg-[#0A0A0A] border-white/[0.06] p-0" align="end">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.04]">
+              <span className="text-sm font-semibold text-white/90">Notifications</span>
+              {unreadCount > 0 && (
+                <Button 
+                  variant="ghost" 
+                  className="h-auto p-0 text-[11px] text-primary hover:text-primary/80 hover:bg-transparent"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    markAllReadMutation.mutate();
+                  }}
+                  disabled={markAllReadMutation.isPending}
+                >
+                  Mark all as read
+                </Button>
+              )}
+            </div>
+            
+            <div className="max-h-[300px] overflow-y-auto">
+              {isNotifLoading ? (
+                <div className="flex justify-center py-6">
+                  <Loader2 className="h-5 w-5 animate-spin text-white/20" />
+                </div>
+              ) : notifications.length === 0 ? (
+                <div className="py-8 text-center flex flex-col items-center justify-center">
+                  <Bell className="h-8 w-8 text-white/10 mb-2" />
+                  <p className="text-xs text-white/30">No notifications yet.</p>
+                </div>
+              ) : (
+                notifications.map((n: any) => (
+                  <div 
+                    key={n.id || n._id} 
+                    className={`px-4 py-3 border-b border-white/[0.02] last:border-0 hover:bg-white/[0.02] cursor-pointer transition-colors ${!n.isRead ? 'bg-primary/5' : ''}`}
+                    onClick={() => handleNotificationClick(n)}
+                  >
+                    <div className="flex gap-3">
+                      <div className={`mt-0.5 h-2 w-2 rounded-full shrink-0 ${!n.isRead ? 'bg-primary' : 'bg-transparent'}`} />
+                      <div className="space-y-1">
+                        <p className={`text-xs ${!n.isRead ? 'text-white/90 font-medium' : 'text-white/60'}`}>
+                          {n.title || n.message}
+                        </p>
+                        {n.title && n.message && (
+                          <p className="text-[11px] text-white/40 line-clamp-2">{n.message}</p>
+                        )}
+                        <p className="text-[10px] text-white/25">
+                          {new Date(n.createdAt).toLocaleDateString()} at {new Date(n.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
         
         <div className="w-px h-5 bg-white/[0.06] mx-1"></div>
         

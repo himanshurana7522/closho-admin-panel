@@ -13,6 +13,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import api from '@/lib/api';
 
 const storeSchema = z.object({
   name: z.string().min(2, 'Name is required'),
@@ -34,18 +36,44 @@ interface Props {
 }
 
 export function StoreFormDialog({ open, onOpenChange, defaultValues }: Props) {
-  const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<StoreFormValues>({
+  const { register, handleSubmit, formState: { errors }, reset } = useForm<StoreFormValues>({
     resolver: zodResolver(storeSchema),
     defaultValues: defaultValues || {
       radius: 5,
     },
   });
 
+  const queryClient = useQueryClient();
+
+  const storeMutation = useMutation({
+    mutationFn: async (data: StoreFormValues) => {
+      const payload = {
+        ...data,
+        latitude: data.latitude ? parseFloat(data.latitude) : undefined,
+        longitude: data.longitude ? parseFloat(data.longitude) : undefined,
+        deliveryRadiusKm: data.radius,
+        isOpen: true
+      };
+      
+      if (defaultValues && (defaultValues as any).id) {
+        return await api.put(`/admin/stores/${(defaultValues as any).id}`, payload);
+      } else {
+        return await api.post('/admin/stores', payload);
+      }
+    },
+    onSuccess: (_, variables) => {
+      toast.success(`Store "${variables.name}" has been ${defaultValues ? 'updated' : 'created'} successfully.`);
+      queryClient.invalidateQueries({ queryKey: ['admin-stores'] });
+      onOpenChange(false);
+      if (!defaultValues) reset();
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to save store');
+    }
+  });
+
   const onSubmit = async (data: StoreFormValues) => {
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    toast.success(`Store "${data.name}" has been ${defaultValues ? 'updated' : 'created'} successfully.`);
-    onOpenChange(false);
-    if (!defaultValues) reset();
+    storeMutation.mutate(data);
   };
 
   const inputClass = "bg-white/[0.03] border-white/[0.06] h-9 text-sm placeholder:text-white/15 focus-visible:ring-primary/30 focus-visible:border-primary/40";
@@ -112,8 +140,8 @@ export function StoreFormDialog({ open, onOpenChange, defaultValues }: Props) {
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="text-xs h-8 bg-white/[0.03] border-white/[0.06] text-white/50">
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting} className="text-xs h-8 min-w-[100px]">
-              {isSubmitting ? (
+            <Button type="submit" disabled={storeMutation.isPending} className="text-xs h-8 min-w-[100px]">
+              {storeMutation.isPending ? (
                 <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Saving...</>
               ) : (
                 defaultValues ? 'Update Store' : 'Save Store'

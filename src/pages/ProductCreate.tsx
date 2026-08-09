@@ -169,8 +169,11 @@ export function ProductCreate() {
     const slug = generateSlug(data.name);
     const brandPrefix = (data.brand || 'PROD').toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 4);
 
+    const { categoryId, ...restData } = data;
+
     const payload = {
-      ...data,
+      ...restData,
+      category: categoryId,
       slug,
       price: data.basePrice,
       images,

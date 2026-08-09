@@ -27,6 +27,18 @@ export function Stock() {
   const [stocks, setStocks] = useState<StockItem[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
 
+  const { data: storesData } = useQuery({
+    queryKey: ['admin-stores-list'],
+    queryFn: async () => {
+      const res = await api.get('/admin/stores');
+      const storeList = res?.data?.data || res?.data || [];
+      if (storeList.length > 0 && store === 'store_1') {
+        setStore(storeList[0].id || storeList[0]._id);
+      }
+      return storeList;
+    }
+  });
+
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['admin-stock', store],
     queryFn: async () => {
@@ -176,9 +188,12 @@ export function Stock() {
                   <SelectValue placeholder="Select a store" />
                 </SelectTrigger>
                 <SelectContent className="border-border">
-                  <SelectItem value="store_1">Closho Downtown (Main)</SelectItem>
-                  <SelectItem value="store_2">Closho Bandra</SelectItem>
-                  <SelectItem value="store_3">Closho Andheri</SelectItem>
+                  {storesData?.map((s: any) => (
+                    <SelectItem key={s.id || s._id} value={s.id || s._id}>{s.name}</SelectItem>
+                  ))}
+                  {!storesData?.length && (
+                    <SelectItem value="store_1" disabled>No stores found</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>

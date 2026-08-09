@@ -19,6 +19,7 @@ const productSchema = z.object({
   name: z.string().min(2, 'Name is required'),
   description: z.string().min(10, 'Description must be at least 10 characters'),
   categoryId: z.string().min(1, 'Category is required'),
+  storeId: z.string().optional(),
   brand: z.string().optional(),
   basePrice: z.coerce.number().min(0, 'Price must be positive'),
   discountedPrice: z.coerce.number().optional(),
@@ -63,6 +64,14 @@ export function ProductCreate() {
     }
   });
 
+  const { data: storesData } = useQuery({
+    queryKey: ['admin-stores'],
+    queryFn: async () => {
+      const res = await api.get('/admin/stores');
+      return res.data.data || res.data || [];
+    }
+  });
+
   const { data: productData } = useQuery({
     queryKey: ['admin-product', id],
     queryFn: async () => {
@@ -78,6 +87,7 @@ export function ProductCreate() {
         name: productData.name || '',
         description: productData.description || '',
         categoryId: productData.category?.id || productData.category || '',
+        storeId: productData.store?.id || productData.store || '',
         brand: productData.brand || '',
         basePrice: productData.price || productData.basePrice || 0,
         discountedPrice: productData.discountedPrice,
@@ -169,11 +179,12 @@ export function ProductCreate() {
     const slug = generateSlug(data.name);
     const brandPrefix = (data.brand || 'PROD').toUpperCase().replace(/[^A-Z0-9]/g, '').substring(0, 4);
 
-    const { categoryId, ...restData } = data;
+    const { categoryId, storeId, ...restData } = data;
 
     const payload = {
       ...restData,
       category: categoryId,
+      store: storeId || null,
       slug,
       price: data.basePrice,
       images,
@@ -270,6 +281,20 @@ export function ProductCreate() {
                 <div className="space-y-1.5">
                   <Label htmlFor="brand" className={labelClass}>Brand</Label>
                   <Input id="brand" {...register('brand')} placeholder="e.g. Closho" className={inputClass} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="store" className={labelClass}>Store (Optional)</Label>
+                  <Select onValueChange={(val) => setValue('storeId', val === 'global' ? '' : val, { shouldValidate: true })} defaultValue={productData?.store?.id || productData?.storeId || 'global'}>
+                    <SelectTrigger className={inputClass}>
+                      <SelectValue placeholder="Global (All Stores)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="global">Global (All Stores)</SelectItem>
+                      {storesData?.map((st: any) => (
+                        <SelectItem key={st.id || st._id} value={st.id || st._id}>{st.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </div>

@@ -18,7 +18,8 @@ import {
   Store,
   Calendar as CalendarIcon,
   ChevronDown,
-  Loader2
+  Loader2,
+  Film
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { 
@@ -117,7 +118,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <Card className="bg-[#0A0A0A] border border-white/[0.04] border-l-2 border-l-[#F5C518] rounded-xl overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs font-medium text-white/50">Total Revenue</CardTitle>
@@ -189,6 +190,21 @@ export function Dashboard() {
             <div className="text-3xl font-bold text-white">{dash.lowStockCount || 0}</div>
             <p className="text-xs text-red-400 mt-1">
               Items need restocking
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-[#0A0A0A] border border-white/[0.04] border-l-2 border-l-pink-500 rounded-xl overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xs font-medium text-white/50">Active Reels</CardTitle>
+            <div className="h-8 w-8 rounded-lg bg-white/[0.03] border border-white/[0.06] flex items-center justify-center">
+              <Film className="h-4 w-4 text-pink-500" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-white">{dash.reelsStats?.activeReels || dash.reelsStats?.totalReels || 0}</div>
+            <p className="text-xs text-white/40 mt-1">
+              Shoppable videos
             </p>
           </CardContent>
         </Card>

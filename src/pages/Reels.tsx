@@ -32,6 +32,7 @@ export function Reels() {
       try {
         const res = await api.get('/admin/reels');
         setIsApiMissing(false);
+        if (res?.data?.data?.reels && Array.isArray(res.data.data.reels)) return res.data.data.reels;
         if (res?.data?.data && Array.isArray(res.data.data)) return res.data.data;
         if (res?.data && Array.isArray(res.data)) return res.data;
         return [];

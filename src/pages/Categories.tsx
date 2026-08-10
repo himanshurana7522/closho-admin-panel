@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import api from '@/lib/api';
 
@@ -20,6 +21,7 @@ export function Categories() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [parentId, setParentId] = useState<string | null>(null);
   
   // Fetch Categories
   const { data: categories = [], isLoading } = useQuery({
@@ -87,7 +89,8 @@ export function Categories() {
     const payload = {
       name,
       slug: generateSlug(name),
-      description
+      description,
+      parentId: parentId === 'none' ? null : parentId
     };
     saveMutation.mutate(payload);
   };
@@ -96,6 +99,7 @@ export function Categories() {
     setEditingId(cat.id || cat._id);
     setName(cat.name || '');
     setDescription(cat.description || '');
+    setParentId(cat.parentId || cat.parent?.id || cat.parent || null);
     setIsDialogOpen(true);
   };
 
@@ -105,6 +109,7 @@ export function Categories() {
       setEditingId(null);
       setName('');
       setDescription('');
+      setParentId(null);
     }, 300);
   };
 
@@ -131,6 +136,7 @@ export function Categories() {
               setEditingId(null);
               setName('');
               setDescription('');
+              setParentId(null);
             }}>
               <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Category
           </DialogTrigger>
@@ -158,6 +164,20 @@ export function Categories() {
                   disabled
                   className="bg-white/[0.01] border-white/[0.04] h-9 text-sm text-white/30"
                 />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-white/40">Parent Category (Optional)</Label>
+                <Select value={parentId || 'none'} onValueChange={setParentId}>
+                  <SelectTrigger className="bg-white/[0.03] border-white/[0.06] h-9 text-sm text-white">
+                    <SelectValue placeholder="Select Parent" />
+                  </SelectTrigger>
+                  <SelectContent className="border-white/[0.06]">
+                    <SelectItem value="none">None (Top Level Category)</SelectItem>
+                    {categories.filter((c: any) => c.id !== editingId && c._id !== editingId).map((c: any) => (
+                      <SelectItem key={c.id || c._id} value={c.id || c._id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-white/40">Description</Label>
@@ -223,6 +243,12 @@ export function Categories() {
                   <tr key={cat.id || cat._id} className="border-b border-white/[0.03] hover:bg-white/[0.015] transition-colors group">
                     <td className="pl-5 pr-4 py-3">
                       <div className="text-sm font-medium text-white/90">{cat.name}</div>
+                      {(cat.parentId || cat.parent) && (
+                        <div className="text-[10px] text-white/40 mt-0.5 flex items-center">
+                          <FolderTree className="h-3 w-3 mr-1 opacity-50" />
+                          Sub-Category
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="text-xs text-white/40 font-mono bg-white/[0.02] inline-block px-1.5 py-0.5 rounded">{cat.slug}</div>

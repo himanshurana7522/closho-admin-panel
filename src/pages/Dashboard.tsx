@@ -84,10 +84,10 @@ export function Dashboard() {
   const recentOrders = ordersRes || [];
   const products = productsRes || [];
 
-  // Robust Fallback Calculation: If backend dashboard API returns 0s, calculate locally from lists
+  // Force local calculation because the backend dashboard API returns mocked dummy data right now
   const fallbackRevenue = recentOrders.reduce((sum: number, o: any) => sum + (Number(o.totalAmount || o.amount || 0)), 0);
   
-  const dash = dashRes && (dashRes.totalOrders > 0 || dashRes.totalRevenue > 0) ? dashRes : {
+  const dash = {
     totalRevenue: fallbackRevenue,
     totalOrders: recentOrders.length,
     activeStores: stores.length,

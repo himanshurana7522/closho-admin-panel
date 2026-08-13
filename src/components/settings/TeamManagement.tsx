@@ -10,6 +10,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import api from '@/lib/api';
 
+import React from 'react';
+
+class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: any}> {
+  constructor(props: any) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error: any) { return { hasError: true, error }; }
+  render() {
+    if (this.state.hasError) {
+      return <div className="p-4 bg-red-500/10 text-red-500 rounded-xl">Crash: {this.state.error?.message || 'Unknown error'}</div>;
+    }
+    return this.props.children;
+  }
+}
+
 export function TeamManagement() {
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -95,12 +108,12 @@ export function TeamManagement() {
 
   const openEdit = (member: any) => {
     setEditingId(member.id || member._id);
-    setFullName(member.fullName || '');
-    setEmail(member.email || '');
-    setPhone(member.phone_no || member.phone || '');
+    setFullName(String(member.fullName || ''));
+    setEmail(String(member.email || ''));
+    setPhone(String(member.phone_no || member.phone || ''));
     setPassword('');
-    setRole(member.role || 'storeAdmin');
-    setStoreId(member.storeId || '');
+    setRole(String(member.role || 'storeAdmin'));
+    setStoreId(String(member.storeId || ''));
     setIsDialogOpen(true);
   };
 
@@ -118,6 +131,7 @@ export function TeamManagement() {
   };
 
   return (
+    <ErrorBoundary>
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div>
@@ -182,7 +196,7 @@ export function TeamManagement() {
                     <SelectContent className="bg-[#0A0A0A] border-white/[0.06]">
                       <SelectItem value="global">All Stores (Global)</SelectItem>
                       {stores.map((s: any) => (
-                        <SelectItem key={s.id || s._id} value={s.id || s._id}>{s.name}</SelectItem>
+                        <SelectItem key={s.id || s._id} value={s.id || s._id}>{String(s.name)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -225,16 +239,16 @@ export function TeamManagement() {
               team.map((member: any) => (
                 <TableRow key={member.id || member._id} className="border-b border-white/[0.03] hover:bg-white/[0.015]">
                   <TableCell className="px-4 py-3">
-                    <div className="font-medium text-sm text-white/90">{member.fullName}</div>
-                    <div className="text-xs text-white/40">{member.email}</div>
+                    <div className="font-medium text-sm text-white/90">{String(member.fullName || '')}</div>
+                    <div className="text-xs text-white/40">{String(member.email || '')}</div>
                   </TableCell>
                   <TableCell className="px-4 py-3">
                     <span className="text-[10px] uppercase tracking-wider bg-white/[0.03] px-2 py-0.5 rounded text-white/60">
-                      {member.role}
+                      {String(member.role || 'ADMIN')}
                     </span>
                   </TableCell>
                   <TableCell className="px-4 py-3 text-xs text-white/50">
-                    {stores.find((s:any) => (s.id || s._id) === member.storeId)?.name || 'Global (All Stores)'}
+                    {String(stores.find((s:any) => (s.id || s._id) === member.storeId)?.name || 'Global (All Stores)')}
                   </TableCell>
                   <TableCell className="px-4 py-3 text-right">
                     <div className="flex justify-end gap-1 opacity-60 hover:opacity-100 transition-opacity">
@@ -255,5 +269,6 @@ export function TeamManagement() {
         </Table>
       </div>
     </div>
+    </ErrorBoundary>
   );
 }

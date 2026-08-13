@@ -2,7 +2,7 @@ import axios from 'axios';
 import { useAuthStore } from '@/store/auth.store';
 
 const api = axios.create({
-  baseURL: '/',
+  baseURL: import.meta.env.PROD ? 'https://api-closho.onrender.com' : '/',
   headers: {
     'Content-Type': 'application/json',
   },

@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { User, Users, CreditCard, ShieldCheck, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/auth.store';
+import { TeamManagement } from '@/components/settings/TeamManagement';
 
 export function Settings() {
   const { user } = useAuthStore();
@@ -134,14 +135,7 @@ export function Settings() {
 
         {/* TEAM TAB */}
         <TabsContent value="team" className="mt-0 outline-none">
-          <Card className="bg-[#0A0A0A] border border-white/[0.04] rounded-xl shadow-none">
-            <CardContent className="py-20 text-center">
-              <Users className="h-12 w-12 text-white/10 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-white mb-2">Team Management</h3>
-              <p className="text-sm text-white/40 max-w-md mx-auto mb-6">Invite team members and manage their roles and permissions across your stores.</p>
-              <Button disabled className="bg-primary text-primary-foreground text-xs font-medium">Invite Member</Button>
-            </CardContent>
-          </Card>
+          <TeamManagement />
         </TabsContent>
 
         {/* PAYMENTS TAB */}

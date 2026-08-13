@@ -6,7 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Search, Plus, Play, MoreVertical, Film, AlertCircle, Loader2 } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Search, Plus, Play, MoreVertical, Film, AlertCircle, Loader2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
@@ -75,6 +76,47 @@ export function Reels() {
       toast.error(err.response?.data?.message || 'Failed to create reel');
     }
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await api.delete(`/admin/reels/${id}`);
+    },
+    onSuccess: () => {
+      toast.success('Reel deleted successfully!');
+      queryClient.invalidateQueries({ queryKey: ['admin-reels'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to delete reel');
+    }
+  });
+
+  const uploadMediaMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append('media', file);
+      const res = await api.post('/admin/reels/upload-media', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      return res.data.data.urls[0];
+    }
+  });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'video' | 'thumbnail') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const toastId = toast.loading(`Uploading ${type}...`);
+    try {
+      const url = await uploadMediaMutation.mutateAsync(file);
+      toast.success(`${type} uploaded successfully!`, { id: toastId });
+      
+      if (type === 'video') setVideoUrl(url);
+      if (type === 'thumbnail') setThumbnail(url);
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.response?.data?.message || `Failed to upload ${type}`, { id: toastId });
+    }
+  };
 
   const filteredReels = reels.filter((r: any) => (r.title || '').toLowerCase().includes(search.toLowerCase()) || (r.description || '').toLowerCase().includes(search.toLowerCase()));
 
@@ -160,25 +202,53 @@ export function Reels() {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-white/40">Video URL (MP4/WebM) *</Label>
-                <Input 
-                  placeholder="https://..." 
-                  value={videoUrl} 
-                  onChange={e => setVideoUrl(e.target.value)}
-                  className="bg-white/[0.03] border-white/[0.06] h-9 text-sm placeholder:text-white/15" 
-                  disabled={createMutation.isPending} 
-                />
+                <Label className="text-xs font-medium text-white/40">Video (MP4/WebM) *</Label>
+                <div className="flex gap-2">
+                  <Input 
+                    placeholder="https://... or upload file" 
+                    value={videoUrl} 
+                    onChange={e => setVideoUrl(e.target.value)}
+                    className="bg-white/[0.03] border-white/[0.06] h-9 text-sm placeholder:text-white/15 flex-1" 
+                    disabled={createMutation.isPending || uploadMediaMutation.isPending} 
+                  />
+                  <div className="relative overflow-hidden group rounded-md">
+                    <input 
+                      type="file" 
+                      accept="video/*"
+                      onChange={e => handleFileUpload(e, 'video')}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                      disabled={createMutation.isPending || uploadMediaMutation.isPending}
+                    />
+                    <Button variant="outline" type="button" className="h-9 px-3 text-xs bg-white/[0.03] border-white/[0.06] group-hover:bg-white/[0.06]">
+                      Upload
+                    </Button>
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-white/40">Thumbnail URL (JPG/PNG) *</Label>
-                <Input 
-                  placeholder="https://..." 
-                  value={thumbnail} 
-                  onChange={e => setThumbnail(e.target.value)}
-                  className="bg-white/[0.03] border-white/[0.06] h-9 text-sm placeholder:text-white/15" 
-                  disabled={createMutation.isPending} 
-                />
+                <Label className="text-xs font-medium text-white/40">Thumbnail (JPG/PNG) *</Label>
+                <div className="flex gap-2">
+                  <Input 
+                    placeholder="https://... or upload file" 
+                    value={thumbnail} 
+                    onChange={e => setThumbnail(e.target.value)}
+                    className="bg-white/[0.03] border-white/[0.06] h-9 text-sm placeholder:text-white/15 flex-1" 
+                    disabled={createMutation.isPending || uploadMediaMutation.isPending} 
+                  />
+                  <div className="relative overflow-hidden group rounded-md">
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={e => handleFileUpload(e, 'thumbnail')}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                      disabled={createMutation.isPending || uploadMediaMutation.isPending}
+                    />
+                    <Button variant="outline" type="button" className="h-9 px-3 text-xs bg-white/[0.03] border-white/[0.06] group-hover:bg-white/[0.06]">
+                      Upload
+                    </Button>
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -211,13 +281,13 @@ export function Reels() {
               </div>
               
               <div className="flex justify-end gap-2 pt-4 border-t border-white/[0.04]">
-                <Button variant="outline" onClick={() => resetUpload(false)} disabled={createMutation.isPending} className="text-xs h-8 bg-white/[0.03] border-white/[0.06] text-white/50">Cancel</Button>
+                <Button variant="outline" onClick={() => resetUpload(false)} className="text-xs h-8 bg-white/[0.03] border-white/[0.06] text-white/50">Cancel</Button>
                 <Button 
                   onClick={handleSave} 
-                  disabled={createMutation.isPending}
-                  className="text-xs h-8 min-w-[100px]"
+                  disabled={createMutation.isPending || uploadMediaMutation.isPending}
+                  className="text-xs h-8 min-w-[100px] bg-primary text-primary-foreground"
                 >
-                  {createMutation.isPending ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Saving...</> : 'Save Reel'}
+                  {createMutation.isPending ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Saving...</> : 'Save'}
                 </Button>
               </div>
             </div>
@@ -271,9 +341,25 @@ export function Reels() {
 
                 {/* More button */}
                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button className="h-7 w-7 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white">
-                    <MoreVertical className="h-3.5 w-3.5" />
-                  </button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="h-7 w-7 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white/70 hover:text-white outline-none">
+                        <MoreVertical className="h-3.5 w-3.5" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="bg-[#0A0A0A] border-white/[0.06] w-36">
+                      <DropdownMenuItem 
+                        onClick={() => {
+                          if (confirm('Are you sure you want to delete this reel?')) {
+                            deleteMutation.mutate(reel.id || reel._id);
+                          }
+                        }}
+                        className="text-xs text-red-400 focus:text-red-300 focus:bg-red-500/10 cursor-pointer"
+                      >
+                        <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
 
                 {/* Tagged Product */}

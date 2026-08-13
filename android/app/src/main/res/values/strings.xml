@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Closho Admin</string>
+    <string name="title_activity_main">Closho Admin</string>
+    <string name="package_name">closho.admin.panel</string>
+    <string name="custom_url_scheme">closho.admin.panel</string>
+</resources>

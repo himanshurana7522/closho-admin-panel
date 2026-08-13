@@ -58,7 +58,7 @@ export function Dashboard() {
   const { data: ordersRes, isLoading: isOrdersLoading } = useQuery({
     queryKey: ['admin-dashboard-orders', selectedStore],
     queryFn: async () => {
-      const params: any = { limit: 5 };
+      const params: any = { limit: 50 }; // Fetch more to calculate stats
       if (selectedStore !== 'all') params.storeId = selectedStore;
       const res = await api.get('/admin/orders', { params });
       if (res?.data?.data && Array.isArray(res.data.data)) return res.data.data;
@@ -68,16 +68,33 @@ export function Dashboard() {
     }
   });
 
-  const dash = dashRes || {
-    totalRevenue: 0,
-    totalOrders: 0,
-    activeStores: 0,
-    totalProducts: 0,
-    lowStockCount: 0,
-    salesChart: []
-  };
+  const { data: productsRes } = useQuery({
+    queryKey: ['admin-dashboard-products', selectedStore],
+    queryFn: async () => {
+      const params: any = { limit: 100 };
+      if (selectedStore !== 'all') params.storeId = selectedStore;
+      const res = await api.get('/admin/products', { params });
+      if (res?.data?.data && Array.isArray(res.data.data)) return res.data.data;
+      if (res?.data?.products && Array.isArray(res.data.products)) return res.data.products;
+      if (res?.data && Array.isArray(res.data)) return res.data;
+      return [];
+    }
+  });
 
   const recentOrders = ordersRes || [];
+  const products = productsRes || [];
+
+  // Robust Fallback Calculation: If backend dashboard API returns 0s, calculate locally from lists
+  const fallbackRevenue = recentOrders.reduce((sum: number, o: any) => sum + (Number(o.totalAmount || o.amount || 0)), 0);
+  
+  const dash = dashRes && (dashRes.totalOrders > 0 || dashRes.totalRevenue > 0) ? dashRes : {
+    totalRevenue: fallbackRevenue,
+    totalOrders: recentOrders.length,
+    activeStores: stores.length,
+    totalProducts: products.length,
+    lowStockCount: products.filter((p: any) => p.variants?.some((v: any) => v.stock < 5)).length,
+    salesChart: []
+  };
 
   if (isDashLoading) {
     return (
@@ -275,7 +292,7 @@ export function Dashboard() {
                 </div>
               ) : recentOrders.length === 0 ? (
                 <div className="text-center py-10 text-white/40 text-sm">No recent orders</div>
-              ) : recentOrders.map((order: any, i: number) => {
+              ) : recentOrders.slice(0, 5).map((order: any, i: number) => {
                 const storeName = order.store?.name || 'Unknown Store';
                 const itemsCount = order.items?.length || 0;
                 

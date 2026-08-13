@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, Plus, MoreHorizontal, Edit, Trash2, FolderTree, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -86,12 +86,14 @@ export function Categories() {
       toast.error('Category name is required');
       return;
     }
-    const payload = {
+    const payload: any = {
       name,
       slug: generateSlug(name),
       description,
-      parentId: parentId === 'none' ? null : parentId
     };
+    if (parentId && parentId !== 'none') {
+      payload.parentId = parentId;
+    }
     saveMutation.mutate(payload);
   };
 
@@ -239,47 +241,68 @@ export function Categories() {
                   </td>
                 </tr>
               ) : (
-                filteredCategories.map((cat: any) => (
-                  <tr key={cat.id || cat._id} className="border-b border-white/[0.03] hover:bg-white/[0.015] transition-colors group">
-                    <td className="pl-5 pr-4 py-3">
-                      <div className="text-sm font-medium text-white/90">{cat.name}</div>
-                      {(cat.parentId || cat.parent) && (
-                        <div className="text-[10px] text-white/40 mt-0.5 flex items-center">
-                          <FolderTree className="h-3 w-3 mr-1 opacity-50" />
-                          Sub-Category
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="text-xs text-white/40 font-mono bg-white/[0.02] inline-block px-1.5 py-0.5 rounded">{cat.slug}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="text-xs text-white/50 line-clamp-1 max-w-xs">{cat.description || '-'}</div>
-                    </td>
-                    <td className="pr-5 pl-4 py-3 text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center justify-center rounded-md hover:bg-white/[0.04] outline-none">
-                          <MoreHorizontal className="h-4 w-4 text-white/40" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="bg-[#0A0A0A] border-white/[0.06] w-36">
-                          <DropdownMenuItem onClick={() => openEdit(cat)} className="text-xs text-white/70 focus:text-white focus:bg-white/[0.04] cursor-pointer">
-                            <Edit className="mr-2 h-3.5 w-3.5" /> Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => {
-                              if (confirm('Are you sure you want to delete this category?')) {
-                                deleteMutation.mutate(cat.id || cat._id);
-                              }
-                            }}
-                            className="text-xs text-red-400 focus:text-red-300 focus:bg-red-500/10 cursor-pointer"
-                          >
-                            <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </td>
-                  </tr>
-                ))
+                (() => {
+                  // Build Tree
+                  const topLevel = filteredCategories.filter((c: any) => !c.parentId && !c.parent);
+                  const getChildren = (parentId: string) => filteredCategories.filter((c: any) => 
+                    c.parentId === parentId || (c.parent && (c.parent.id === parentId || c.parent._id === parentId))
+                  );
+
+                  const renderRow = (cat: any, depth: number) => {
+                    const children = getChildren(cat.id || cat._id);
+                    return (
+                      <React.Fragment key={cat.id || cat._id}>
+                        <tr className="border-b border-white/[0.03] hover:bg-white/[0.015] transition-colors group">
+                          <td className="pr-4 py-3" style={{ paddingLeft: `${20 + (depth * 24)}px` }}>
+                            <div className="flex items-center gap-2">
+                              {depth > 0 && <div className="w-px h-6 bg-white/[0.1] -ml-4 mr-2" />}
+                              <div>
+                                <div className="text-sm font-medium text-white/90">{cat.name}</div>
+                                {depth > 0 && (
+                                  <div className="text-[10px] text-white/40 mt-0.5 flex items-center">
+                                    <FolderTree className="h-3 w-3 mr-1 opacity-50" />
+                                    Sub-Category
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="text-xs text-white/40 font-mono bg-white/[0.02] inline-block px-1.5 py-0.5 rounded">{cat.slug}</div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="text-xs text-white/50 line-clamp-1 max-w-xs">{cat.description || '-'}</div>
+                          </td>
+                          <td className="pr-5 pl-4 py-3 text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center justify-center rounded-md hover:bg-white/[0.04] outline-none">
+                                <MoreHorizontal className="h-4 w-4 text-white/40" />
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="bg-[#0A0A0A] border-white/[0.06] w-36">
+                                <DropdownMenuItem onClick={() => openEdit(cat)} className="text-xs text-white/70 focus:text-white focus:bg-white/[0.04] cursor-pointer">
+                                  <Edit className="mr-2 h-3.5 w-3.5" /> Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  onClick={() => {
+                                    if (confirm('Are you sure you want to delete this category?')) {
+                                      deleteMutation.mutate(cat.id || cat._id);
+                                    }
+                                  }}
+                                  className="text-xs text-red-400 focus:text-red-300 focus:bg-red-500/10 cursor-pointer"
+                                >
+                                  <Trash2 className="mr-2 h-3.5 w-3.5" /> Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
+                        </tr>
+                        {children.map((child: any) => renderRow(child, depth + 1))}
+                      </React.Fragment>
+                    );
+                  };
+
+                  return topLevel.map((cat: any) => renderRow(cat, 0));
+                })()
               )}
             </tbody>
           </table>

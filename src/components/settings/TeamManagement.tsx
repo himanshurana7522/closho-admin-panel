@@ -175,12 +175,12 @@ export function TeamManagement() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-white/40">Assigned Store</Label>
-                  <Select value={storeId} onValueChange={(val) => setStoreId(val || '')}>
+                  <Select value={storeId || 'global'} onValueChange={(val) => setStoreId(val === 'global' ? '' : val)}>
                     <SelectTrigger className="bg-white/[0.03] border-white/[0.06] h-9 text-sm">
                       <SelectValue placeholder="Select store" />
                     </SelectTrigger>
                     <SelectContent className="bg-[#0A0A0A] border-white/[0.06]">
-                      <SelectItem value="">All Stores (Global)</SelectItem>
+                      <SelectItem value="global">All Stores (Global)</SelectItem>
                       {stores.map((s: any) => (
                         <SelectItem key={s.id || s._id} value={s.id || s._id}>{s.name}</SelectItem>
                       ))}
